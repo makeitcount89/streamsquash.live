@@ -1,88 +1,1187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SquashLive — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#07090c;--surface:#0f1318;--surface2:#161c24;
+    --accent:#ff4d00;--accent2:#00c8ff;--green:#00e676;
+    --text:#f0f0f0;--muted:#6b7280;--border:rgba(255,255,255,0.07);
+    --error:#ff4d6d;--success:#00e676;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;
+    min-height:100vh;padding:2rem 1.5rem;}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");opacity:0.4;}
+
+  .wrap{max-width:640px;margin:0 auto;position:relative;z-index:1}
+  .logo{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.05em;margin-bottom:0.25rem}
+  .logo span{color:var(--accent)}
+  .page-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:0.03em;margin-bottom:0.25rem}
+  .page-sub{font-size:0.85rem;color:var(--muted);margin-bottom:2rem}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    overflow:hidden;margin-bottom:1.5rem;position:relative}
+  .card::before{content:'';position:absolute;top:0;left:15%;right:15%;height:1px;
+    background:linear-gradient(to right,transparent,var(--accent),transparent)}
+  .card-head{padding:1.25rem 1.5rem 0.75rem;border-bottom:1px solid var(--border)}
+  .card-title{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:0.05em}
+  .card-sub{font-size:0.78rem;color:var(--muted);margin-top:0.15rem}
+  .card-body{padding:1.25rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:1rem}
+
+  textarea{width:100%;background:var(--surface2);border:1px solid var(--border);
+    color:var(--text);font-family:'Space Mono',monospace;font-size:0.82rem;
+    padding:0.85rem 1rem;border-radius:8px;outline:none;resize:vertical;
+    min-height:100px;line-height:1.7;transition:border-color 0.2s}
+  textarea:focus{border-color:rgba(255,77,0,0.5)}
+  textarea::placeholder{color:var(--muted)}
+
+  .btn{display:flex;align-items:center;justify-content:center;gap:0.5rem;
+    font-family:'Outfit',sans-serif;font-weight:700;font-size:0.9rem;
+    padding:0.8rem 1.5rem;border-radius:8px;border:none;cursor:pointer;
+    transition:all 0.2s;width:100%}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,77,0,0.35)}
+  .btn-primary:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+
+  .result-list{display:flex;flex-direction:column;gap:0.4rem}
+  .result-row{display:flex;align-items:center;gap:0.65rem;padding:0.55rem 0.85rem;
+    border-radius:6px;font-size:0.8rem;background:var(--surface2);border:1px solid var(--border)}
+  .result-row .email{font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .badge{font-size:0.62rem;font-weight:700;letter-spacing:0.08em;padding:0.2rem 0.55rem;
+    border-radius:4px;white-space:nowrap;flex-shrink:0}
+  .badge-success{background:rgba(0,230,118,0.12);color:var(--success);border:1px solid rgba(0,230,118,0.2)}
+  .badge-warn{background:rgba(255,214,0,0.1);color:#ffd600;border:1px solid rgba(255,214,0,0.2)}
+  .badge-error{background:rgba(255,77,109,0.1);color:var(--error);border:1px solid rgba(255,77,109,0.2)}
+
+  .broadcaster-list{display:flex;flex-direction:column;gap:0.4rem}
+  .broadcaster-row{display:flex;align-items:center;justify-content:space-between;
+    padding:0.55rem 0.85rem;border-radius:6px;background:var(--surface2);
+    border:1px solid var(--border);font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--muted)}
+  .broadcaster-row span{color:var(--text)}
+
+  .alert{padding:0.75rem 1rem;border-radius:8px;font-size:0.82rem;line-height:1.5;border:1px solid transparent}
+  .alert-error{background:rgba(255,77,109,0.08);border-color:rgba(255,77,109,0.2);color:#ff8fa3}
+  .alert-success{background:rgba(0,230,118,0.08);border-color:rgba(0,230,118,0.2);color:var(--green)}
+
+  .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,0.2);
+    border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem}
+  .nav-right{display:flex;gap:1rem;align-items:center}
+  .signed-in-as{font-size:0.75rem;color:var(--muted)}
+  .sign-out{font-size:0.75rem;color:var(--muted);background:none;border:none;
+    cursor:pointer;font-family:'Outfit',sans-serif;transition:color 0.2s}
+  .sign-out:hover{color:var(--accent)}
+
+  #authWall{display:flex;align-items:center;justify-content:center;min-height:80vh}
+  .auth-card{max-width:360px;width:100%;background:var(--surface);
+    border:1px solid var(--border);border-radius:12px;padding:2rem;
+    display:flex;flex-direction:column;gap:1rem}
+  input[type=email],input[type=password]{width:100%;background:var(--surface2);
+    border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;
+    font-size:0.9rem;padding:0.75rem 1rem;border-radius:8px;outline:none;transition:border-color 0.2s}
+  input:focus{border-color:rgba(255,77,0,0.5)}
+</style>
+</head>
+<body>
+
+<!-- Auth wall — shown until signed in as admin -->
+<div id="authWall">
+  <div class="auth-card">
+    <div class="logo">Squash<span>Live</span></div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem">Admin Sign In</div>
+    <input type="email" id="loginEmail" placeholder="Admin email" autocomplete="email"/>
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password"/>
+    <div id="loginAlert" style="display:none"></div>
+    <button class="btn btn-primary" id="loginBtn" onclick="signIn()">Sign In</button>
+  </div>
+</div>
+
+<!-- Admin panel — shown after auth -->
+<div id="adminPanel" style="display:none">
+  <div class="wrap">
+    <div class="nav">
+      <div>
+        <div class="logo">Squash<span>Live</span></div>
+        <div style="font-size:0.75rem;color:var(--muted)">Admin Panel</div>
+      </div>
+      <div class="nav-right">
+        <span class="signed-in-as" id="signedInAs"></span>
+        <button class="sign-out" onclick="signOut()">Sign out</button>
+      </div>
+    </div>
+
+    <!-- Viewer stats -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Viewer Stats</div>
+        <div class="card-sub">Live and historical viewing data across all matches.</div>
+      </div>
+      <div class="card-body">
+        <div id="viewerStats" style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+          <div style="color:var(--muted);font-size:0.82rem;grid-column:1/-1">Loading…</div>
+        </div>
+        <div id="viewerBreakdown" style="display:flex;flex-direction:column;gap:0.4rem;margin-top:0.5rem"></div>
+        <button class="btn" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:0.8rem" onclick="loadViewerStats()">
+          ↺ Refresh Stats
+        </button>
+      </div>
+    </div>
+
+    <!-- Past Matches -->
+    <!-- ── NEXT LIVE COUNTDOWNS ───────────────────────────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Upcoming Events</div>
+        <div class="card-sub">Countdown cards shown on the dashboard when no matches are live. Viewers can swipe between them.</div>
+      </div>
+      <div class="card-body">
+        <div id="nlEventList" style="display:flex;flex-direction:column;gap:0.5rem;min-height:1.5rem">
+          <div style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0.65rem;border-top:1px solid var(--border);padding-top:1rem;margin-top:0.25rem">
+          <div style="font-size:0.78rem;color:var(--muted);letter-spacing:0.05em;font-family:'Space Mono',monospace">ADD EVENT</div>
+          <input id="nlEvent" type="text" maxlength="60" placeholder="e.g. State 1 Grading"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:7px;
+              padding:0.6rem 0.85rem;color:var(--text);font-family:'Outfit',sans-serif;font-size:0.9rem;outline:none;">
+          <input id="nlDatetime" type="datetime-local"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:7px;
+              padding:0.6rem 0.85rem;color:var(--text);font-family:'Outfit',sans-serif;font-size:0.9rem;outline:none;">
+          <button onclick="addNextLiveEvent()" style="padding:0.6rem;background:var(--accent);
+            color:#fff;border:none;border-radius:7px;font-family:'Outfit',sans-serif;
+            font-weight:700;font-size:0.85rem;cursor:pointer;">
+            + Add Event
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Past Matches</div>
+        <div class="card-sub">Remove any match with errors from the public dashboard.</div>
+      </div>
+      <div class="card-body">
+        <div id="pastMatchesList" style="display:flex;flex-direction:column;gap:0.4rem">
+          <div style="color:var(--muted);font-size:0.82rem">Loading…</div>
+        </div>
+        <button class="btn" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:0.8rem" onclick="loadPastMatchesAdmin()">
+          ↺ Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Invite new hosts -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Invite Hosts</div>
+        <div class="card-sub">Enter one or more email addresses — each will be added to the broadcasters list and sent an invite email.</div>
+      </div>
+      <div class="card-body">
+        <textarea id="emailsInput" placeholder="Enter email addresses, one per line or comma-separated:&#10;&#10;john@example.com&#10;sarah@club.com, mike@squash.org"></textarea>
+        <div id="inviteAlert" style="display:none"></div>
+        <button class="btn btn-primary" id="inviteBtn" onclick="inviteHosts()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Send Invites
+        </button>
+        <div id="inviteResults" class="result-list" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Current broadcasters -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Current Broadcasters</div>
+        <div class="card-sub">All approved hosts. Flagged hosts are automatically removed.</div>
+      </div>
+      <div class="card-body">
+        <div id="broadcasterList" class="broadcaster-list">
+          <div style="color:var(--muted);font-size:0.82rem">Loading…</div>
+        </div>
+        <button class="btn" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:0.8rem" onclick="loadBroadcasters()">
+          ↺ Refresh List
+        </button>
+      </div>
+    </div>
+
+    <!-- Game Won Sound -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Game Won Sound</div>
+        <div class="card-sub">Plays on host and all viewers when a game is won. Upload an MP3 — viewers fetch audio directly from Supabase.</div>
+      </div>
+      <div class="card-body">
+        <div id="gameSoundCurrent" style="color:var(--muted);font-size:0.82rem">Loading…</div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1rem;display:flex;flex-direction:column;gap:0.6rem;margin-top:0.25rem">
+          <div style="font-size:0.78rem;color:var(--muted);font-weight:600">Upload New Sound</div>
+          <input id="gameSoundName" type="text" placeholder="e.g. Game Won Fanfare"
+            style="background:#07090c;border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.65rem 0.9rem;border-radius:7px;outline:none;width:100%"/>
+          <label style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:#07090c;border:1px solid var(--border);border-radius:7px;cursor:pointer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,16 12,12 8,16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            <span id="gameSoundFileLabel" style="font-size:0.82rem;color:var(--muted)">Choose MP3 file</span>
+            <input type="file" id="gameSoundFile" accept="audio/mpeg,audio/mp3" style="display:none"
+              onchange="document.getElementById('gameSoundFileLabel').textContent=this.files[0]?.name||'Choose MP3 file'"/>
+          </label>
+          <div id="gameSoundStatus" style="font-size:0.75rem;color:var(--muted);min-height:1rem"></div>
+          <button class="btn btn-primary" onclick="uploadGameSound()" id="gameSoundUploadBtn">Upload Sound</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ad Videos -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Ad Videos</div>
+        <div class="card-sub">Up to 4 ads rotate in strict order. Viewers watch one before each stream. Upload MP4 or WebM, max 20MB.</div>
+      </div>
+      <div class="card-body">
+        <div id="adVideoList" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem"></div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1rem;display:flex;flex-direction:column;gap:0.6rem">
+          <div style="font-size:0.78rem;color:var(--muted);font-weight:600">Upload New Ad</div>
+          <input id="adName" type="text" placeholder="Ad name e.g. Smith Physiotherapy May 2026"
+            style="background:#07090c;border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.65rem 0.9rem;border-radius:7px;outline:none;width:100%"/>
+          <label style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:#07090c;border:1px solid var(--border);border-radius:7px;cursor:pointer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,16 12,12 8,16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            <span id="adFileLabel" style="font-size:0.82rem;color:var(--muted)">Choose video file (MP4/WebM)</span>
+            <input type="file" id="adFile" accept="video/mp4,video/webm" style="display:none" onchange="document.getElementById('adFileLabel').textContent=this.files[0]?.name||'Choose video file'"/>
+          </label>
+          <div id="adUploadStatus" style="font-size:0.75rem;color:var(--muted);min-height:1rem"></div>
+          <button class="btn btn-primary" onclick="uploadAd()" id="adUploadBtn">Upload Ad</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sponsor Logos -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Sponsor Logos</div>
+        <div class="card-sub">Community sponsors (200×200px max) appear next to live matches. Major sponsor (500×500px) appears prominently above matches.</div>
+      </div>
+      <div class="card-body">
+        <div id="sponsorList" style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem"></div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1rem;display:flex;flex-direction:column;gap:0.6rem">
+          <div style="font-size:0.78rem;color:var(--muted);font-weight:600">Upload New Sponsor</div>
+          <input id="sponsorName" type="text" placeholder="Sponsor name"
+            style="background:#07090c;border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.65rem 0.9rem;border-radius:7px;outline:none;width:100%"/>
+          <input id="sponsorUrl" type="text" placeholder="Website URL (optional) e.g. https://example.com.au"
+            style="background:#07090c;border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.65rem 0.9rem;border-radius:7px;outline:none;width:100%"/>
+          <select id="sponsorTier" style="background:#07090c;border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.65rem 0.9rem;border-radius:7px;outline:none;width:100%">
+            <option value="community">Community Sponsor (200×200px, shown next to matches)</option>
+            <option value="major">Major Sponsor (500×500px, shown above matches)</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:#07090c;border:1px solid var(--border);border-radius:7px;cursor:pointer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16,16 12,12 8,16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            <span id="sponsorFileLabel" style="font-size:0.82rem;color:var(--muted)">Choose image (JPG/PNG)</span>
+            <input type="file" id="sponsorFile" accept="image/jpeg,image/png" style="display:none" onchange="document.getElementById('sponsorFileLabel').textContent=this.files[0]?.name||'Choose image'"/>
+          </label>
+          <div id="sponsorUploadStatus" style="font-size:0.75rem;color:var(--muted);min-height:1rem"></div>
+          <button class="btn btn-primary" onclick="uploadSponsor()" id="sponsorUploadBtn">Upload Sponsor</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending highlights -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Pending Highlights</div>
+        <div class="card-sub">Review and approve or reject submitted clips.</div>
+      </div>
+      <div class="card-body">
+        <div id="pendingHighlights">
+          <div style="color:var(--muted);font-size:0.82rem">Loading…</div>
+        </div>
+        <button class="btn" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:0.8rem" onclick="loadPendingHighlights()">
+          ↺ Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Approved highlights (with remove) -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Live Highlights</div>
+        <div class="card-sub">Currently visible on the public page. Remove any clip instantly.</div>
+      </div>
+      <div class="card-body">
+        <div id="hlBulkBar" style="display:none;align-items:center;gap:0.65rem;margin-bottom:0.65rem;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--muted);cursor:pointer;user-select:none">
+            <input type="checkbox" id="hlSelectAll" onchange="toggleSelectAllHighlights(this.checked)"
+              style="width:15px;height:15px;accent-color:#ff4d6d;cursor:pointer">
+            Select all
+          </label>
+          <span id="hlSelCount" style="font-size:0.75rem;color:var(--muted)">0 selected</span>
+          <button id="hlDeleteBtn" onclick="removeSelectedHighlights()" disabled
+            style="padding:0.35rem 0.85rem;background:rgba(255,77,109,0.12);border:1px solid rgba(255,77,109,0.3);
+            color:#ff4d6d;border-radius:6px;font-family:'Outfit',sans-serif;font-weight:700;font-size:0.78rem;
+            cursor:pointer;opacity:0.5;transition:opacity 0.15s">
+            🗑 Delete Selected
+          </button>
+        </div>
+        <div id="approvedHighlights">
+          <div style="color:var(--muted);font-size:0.82rem">Loading…</div>
+        </div>
+        <button class="btn" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:0.8rem;margin-top:0.5rem" onclick="loadApprovedHighlights()">
+          ↺ Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Bulk add highlights -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Bulk Add Highlights</div>
+        <div class="card-sub">Paste YouTube URLs — one per line. Titles are fetched automatically. Videos are added below user-submitted highlights.</div>
+      </div>
+      <div class="card-body">
+        <textarea id="bulkUrlsInput" placeholder="https://www.youtube.com/watch?v=...&#10;https://youtu.be/...&#10;https://www.youtube.com/watch?v=..."
+          style="width:100%;min-height:120px;background:var(--surface2);border:1px solid var(--border);
+          color:var(--text);font-family:'Space Mono',monospace;font-size:0.75rem;padding:0.75rem;
+          border-radius:7px;outline:none;resize:vertical;line-height:1.6;transition:border-color 0.2s"
+          onfocus="this.style.borderColor='rgba(0,200,255,0.4)'"
+          onblur="this.style.borderColor='var(--border)'"></textarea>
+        <div id="bulkProgress" style="display:none;margin-top:0.75rem;display:flex;flex-direction:column;gap:0.35rem"></div>
+        <div style="display:flex;gap:0.65rem;margin-top:0.75rem;align-items:center">
+          <button class="btn" id="bulkSubmitBtn" onclick="bulkAddHighlights()"
+            style="background:rgba(0,200,255,0.12);border:1px solid rgba(0,200,255,0.35);color:#00c8ff">
+            ⬆ Insert Videos
+          </button>
+          <button class="btn" onclick="document.getElementById('bulkUrlsInput').value='';document.getElementById('bulkProgress').style.display='none'"
+            style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:0.8rem">
+            Clear
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
 const SUPABASE_URL = 'https://bmhaihybdnaufprysjbw.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_0QwuePBb2qNgaDR_5rI0Uw_DS_NpjSV';
 const ADMIN_EMAIL = 'swpage89@gmail.com';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+let sessionToken = null;
 
-  const token = (req.headers.authorization || '').replace('Bearer ', '');
+// ── AUTH ────────────────────────────────────────────────────────────────────────────
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session && session.user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    sessionToken = session.access_token;
+    showPanel(session.user.email);
+  }
+})();
+
+async function signIn() {
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+
+  if (email !== ADMIN_EMAIL.toLowerCase()) {
+    showLoginAlert('This email is not authorised for admin access.');
+    btn.disabled = false; btn.textContent = 'Sign In';
+    return;
+  }
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  btn.disabled = false; btn.textContent = 'Sign In';
+  if (error) { showLoginAlert(error.message); return; }
+  sessionToken = data.session.access_token;
+  showPanel(email);
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  sessionToken = null;
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('authWall').style.display = 'flex';
+}
+
+function showPanel(email) {
+  document.getElementById('authWall').style.display = 'none';
+  document.getElementById('adminPanel').style.display = 'block';
+  document.getElementById('signedInAs').textContent = email;
+  loadBroadcasters();
+  loadNextLive();
+  loadPastMatchesAdmin();
+  loadPendingHighlights();
+  loadApprovedHighlights();
+  loadViewerStats();
+  loadGameSoundAdmin();
+  loadAdVideos();
+  loadSponsorList();
+}
+
+function showLoginAlert(msg) {
+  const el = document.getElementById('loginAlert');
+  el.className = 'alert alert-error';
+  el.style.display = 'block';
+  el.textContent = msg;
+}
+
+// ── INVITE HOSTS ──────────────────────────────────────────────────────────────────────────
+async function inviteHosts() {
+  const raw = document.getElementById('emailsInput').value;
+  // Split on newlines and commas, clean up
+  const emails = raw.split(/[\n,]+/).map(e => e.trim().toLowerCase()).filter(e => e.includes('@'));
+
+  if (emails.length === 0) {
+    const el = document.getElementById('inviteAlert');
+    el.className = 'alert alert-error'; el.style.display = 'block';
+    el.textContent = 'Please enter at least one valid email address.';
+    return;
+  }
+
+  document.getElementById('inviteAlert').style.display = 'none';
+  const btn = document.getElementById('inviteBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Sending…';
+
   try {
-    const p = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    if ((p.email || '').toLowerCase() !== ADMIN_EMAIL.toLowerCase())
-      return res.status(403).json({ error: 'Forbidden' });
-  } catch(e) { return res.status(401).json({ error: 'Unauthorised' }); }
-
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) return res.status(500).json({ error: 'Server misconfigured' });
-
-  try {
-    const now = new Date();
-    const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
-    const weekStart = new Date(now); weekStart.setDate(now.getDate() - 7);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    // ── Live rooms (currently active) ──────────────────────────────────────────
-    const cutoff = new Date(Date.now() - 70000).toISOString();
-    const liveR = await fetch(
-      `${SUPABASE_URL}/rest/v1/live_rooms?last_seen=gte.${cutoff}&select=id,current_viewers,peak_viewers,total_viewer_joins`,
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
-    );
-    const liveRooms = liveR.ok ? await liveR.json() : [];
-    const liveNow = liveRooms.reduce((s, r) => s + (r.current_viewers || 0), 0);
-    const liveJoins = liveRooms.reduce((s, r) => s + (r.total_viewer_joins || 0), 0);
-
-    // ── Past matches ────────────────────────────────────────────────────────────
-    const matchR = await fetch(
-      `${SUPABASE_URL}/rest/v1/past_matches?select=id,p1,p2,max_viewers,total_viewer_joins,completed_at&order=max_viewers.desc`,
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
-    );
-    const matches = matchR.ok ? await matchR.json() : [];
-
-    // Total viewer joins = past matches + currently live rooms
-    const pastTotal = matches.reduce((s, m) => s + (m.total_viewer_joins || m.max_viewers || 0), 0);
-    const allTimeTotal = pastTotal + liveJoins;
-
-    const todayTotal = matches
-      .filter(m => new Date(m.completed_at) >= todayStart)
-      .reduce((s, m) => s + (m.total_viewer_joins || m.max_viewers || 0), 0);
-    const weekTotal = matches
-      .filter(m => new Date(m.completed_at) >= weekStart)
-      .reduce((s, m) => s + (m.total_viewer_joins || m.max_viewers || 0), 0);
-    const monthTotal = matches
-      .filter(m => new Date(m.completed_at) >= monthStart)
-      .reduce((s, m) => s + (m.total_viewer_joins || m.max_viewers || 0), 0);
-
-    // Add live room joins to today/week/month since they're happening now
-    const todayFinal = todayTotal + liveJoins;
-    const weekFinal = weekTotal + liveJoins;
-    const monthFinal = monthTotal + liveJoins;
-
-    // Top matches by total viewers
-    const topMatches = matches
-      .filter(m => (m.total_viewer_joins || m.max_viewers) > 0)
-      .slice(0, 5)
-      .map(m => ({ p1: m.p1, p2: m.p2, viewers: m.total_viewer_joins || m.max_viewers }));
-
-    // ── Ad stats ────────────────────────────────────────────────────────────────
-    const adR = await fetch(
-      `${SUPABASE_URL}/rest/v1/ad_videos?select=name,partial_plays,full_plays&order=position.asc`,
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
-    );
-    const ads = adR.ok ? await adR.json() : [];
-
-    return res.status(200).json({
-      liveNow,
-      today: todayFinal,
-      week: weekFinal,
-      month: monthFinal,
-      total: allTimeTotal,
-      totalMatches: matches.length,
-      adBreakdown: ads,
-      topMatches
+    const r = await fetch('/api/admin-invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionToken}`
+      },
+      body: JSON.stringify({ emails })
     });
+    const data = await r.json();
+
+    if (!r.ok) {
+      const el = document.getElementById('inviteAlert');
+      el.className = 'alert alert-error'; el.style.display = 'block';
+      el.textContent = data.error || 'Request failed';
+      return;
+    }
+
+    const results = data.results || [];
+    const container = document.getElementById('inviteResults');
+    container.style.display = 'flex';
+    container.innerHTML = results.map(r => {
+      const badgeClass = r.status === 'invited' ? 'badge-success'
+        : r.status === 'already_exists' ? 'badge-warn' : 'badge-error';
+      const badgeText = r.status === 'invited' ? 'INVITED'
+        : r.status === 'already_exists' ? 'ALREADY EXISTS'
+        : r.status === 'invalid' ? 'INVALID EMAIL' : 'ERROR';
+      return `<div class="result-row">
+        <span class="email">${r.email}</span>
+        <span class="badge ${badgeClass}">${badgeText}</span>
+      </div>`;
+    }).join('');
+
+    const allGood = results.every(r => r.status === 'invited' || r.status === 'already_exists');
+    if (allGood) document.getElementById('emailsInput').value = '';
+    loadBroadcasters();
+
   } catch(e) {
-    console.error('viewer-stats error:', e);
-    return res.status(500).json({ error: e.message });
+    const el = document.getElementById('inviteAlert');
+    el.className = 'alert alert-error'; el.style.display = 'block';
+    el.textContent = 'Network error: ' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> Send Invites`;
+}
+
+// ── BROADCASTER LIST ──────────────────────────────────────────────────────────────────────────
+async function loadBroadcasters() {
+  const list = document.getElementById('broadcasterList');
+  list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">Loading…</div>';
+
+  try {
+    const r = await fetch('/api/admin-invite', {
+      headers: { 'Authorization': `Bearer ${sessionToken}` }
+    });
+    if (!r.ok) { list.innerHTML = '<div style="color:var(--error);font-size:0.82rem">Could not load list.</div>'; return; }
+    const data = await r.json();
+    if (!data.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">No broadcasters added yet.</div>';
+      return;
+    }
+    list.innerHTML = data.map(b =>
+      `<div class="broadcaster-row"><span>${b.email}</span></div>`
+    ).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="color:var(--error);font-size:0.82rem">${e.message}</div>`;
   }
 }
+
+// ── NEXT LIVE EVENTS (multi) ──────────────────────────────────────────────────────────────────────
+async function _getNextLiveEvents(){
+  try{
+    const { data } = await sb.from('site_config').select('value').eq('key','next_live_events').single();
+    return Array.isArray(data?.value) ? data.value : [];
+  }catch(e){ return []; }
+}
+
+async function _saveNextLiveEvents(events){
+  const { error } = await sb.from('site_config').upsert(
+    { key: 'next_live_events', value: events },
+    { onConflict: 'key' }
+  );
+  if(error) throw error;
+}
+
+async function loadNextLive(){
+  const list = document.getElementById('nlEventList');
+  list.innerHTML = '<div style="font-size:0.82rem;color:var(--muted)">Loading…</div>';
+  const events = await _getNextLiveEvents();
+  if(!events.length){
+    list.innerHTML = '<div style="font-size:0.82rem;color:var(--muted)">No upcoming events set.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  events.forEach((ev, i) => {
+    const dt = new Date(ev.datetime);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.75rem;' +
+      'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.6rem 0.85rem;';
+    row.innerHTML = `
+      <div>
+        <div style="font-family:'Outfit',sans-serif;font-weight:600;font-size:0.88rem;color:var(--text)">${ev.event || '(no name)'}</div>
+        <div style="font-family:'Space Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:0.15rem">${dt.toLocaleString()}</div>
+      </div>
+      <button onclick="removeNextLiveEvent(${i})" style="background:none;border:none;
+        color:var(--muted);font-size:1rem;cursor:pointer;padding:0.25rem 0.5rem;
+        border-radius:5px;transition:color 0.15s;" onmouseenter="this.style.color='#ff4d00'"
+        onmouseleave="this.style.color='var(--muted)'">✕</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+async function addNextLiveEvent(){
+  const event    = document.getElementById('nlEvent').value.trim();
+  const datetime = document.getElementById('nlDatetime').value;
+  if(!datetime){ alert('Please select a date and time.'); return; }
+  if(new Date(datetime) <= new Date()){ alert('Please choose a future date and time.'); return; }
+  try{
+    const events = await _getNextLiveEvents();
+    events.push({ event, datetime });
+    // Sort chronologically
+    events.sort((a,b) => new Date(a.datetime) - new Date(b.datetime));
+    await _saveNextLiveEvents(events);
+    document.getElementById('nlEvent').value = '';
+    document.getElementById('nlDatetime').value = '';
+    await loadNextLive();
+  }catch(e){ alert('Failed to add: ' + e.message); }
+}
+
+async function removeNextLiveEvent(index){
+  try{
+    const events = await _getNextLiveEvents();
+    events.splice(index, 1);
+    await _saveNextLiveEvents(events);
+    await loadNextLive();
+  }catch(e){ alert('Failed to remove: ' + e.message); }
+}
+
+// ── PAST MATCHES ─────────────────────────────────────────────────────────────────────────────
+async function loadPastMatchesAdmin(){
+  const list = document.getElementById('pastMatchesList');
+  list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">Loading…</div>';
+  try {
+    const token = await getToken();
+    const r = await fetch('/api/rooms?past=1', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if(!r.ok){ list.innerHTML = '<div style="color:var(--error);font-size:0.82rem">Could not load.</div>'; return; }
+    const matches = await r.json();
+    if(!matches.length){
+      list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">No past matches yet.</div>';
+      return;
+    }
+    list.innerHTML = matches.map(m => {
+      const date = new Date(m.completedAt).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});
+      const score = m.p1games !== undefined ? `${m.p1games}–${m.p2games}` : '';
+      const winner = m.winnerName && m.winnerName !== 'Incomplete' ? ` · ${m.winnerName} wins` : m.winnerName === 'Incomplete' ? ' · Incomplete' : '';
+      return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;
+        background:var(--surface2);border:1px solid var(--border);border-radius:7px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${m.p1} vs ${m.p2}
+          </div>
+          <div style="font-size:0.68rem;color:var(--muted);margin-top:0.1rem">
+            ${score}${winner} · ${date} · Best of ${m.bestOf}
+          </div>
+        </div>
+        <button onclick="deletePastMatch('${m.id}')"
+          style="padding:0.35rem 0.65rem;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);
+          color:#ff4d6d;border-radius:5px;font-family:'Outfit',sans-serif;font-size:0.75rem;
+          font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">
+          Remove
+        </button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="color:var(--error);font-size:0.82rem">${e.message}</div>`;
+  }
+}
+
+async function deletePastMatch(id){
+  if(!confirm('Remove this match from the dashboard permanently?')) return;
+  try {
+    const token = await getToken();
+    const r = await fetch('/api/rooms?past=1&id=' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if(!r.ok) throw new Error(await r.text());
+    loadPastMatchesAdmin();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── VIEWER STATS ─────────────────────────────────────────────────────────────────────────────
+async function getToken(){
+  // Always get a fresh token to avoid 401 after 1 hour
+  const { data: { session } } = await sb.auth.getSession();
+  if(session) sessionToken = session.access_token;
+  return sessionToken;
+}
+
+async function loadViewerStats(){
+  const statsEl = document.getElementById('viewerStats');
+  const breakdownEl = document.getElementById('viewerBreakdown');
+  statsEl.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;grid-column:1/-1">Loading…</div>';
+  try {
+    const token = await getToken();
+    const r = await fetch('/api/viewer-stats', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if(!r.ok){ statsEl.innerHTML = '<div style="color:var(--error);font-size:0.82rem;grid-column:1/-1">Could not load stats.</div>'; return; }
+    const d = await r.json();
+
+    statsEl.innerHTML = [
+      ['Live Now', d.liveNow ?? 0, '#00c8ff'],
+      ['Today', d.today ?? 0, '#00e676'],
+      ['This Week', d.week ?? 0, '#ffd600'],
+      ['This Month', d.month ?? 0, '#ff4d00'],
+      ['All Time', d.total ?? 0, '#f0f0f0'],
+      ['Total Matches', d.totalMatches ?? 0, '#9c8fff']
+    ].map(([label, val, color]) => `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:0.85rem 1rem">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:${color};line-height:1">${val.toLocaleString()}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:0.2rem;letter-spacing:0.05em">${label.toUpperCase()}</div>
+      </div>`).join('');
+
+    if(d.adBreakdown && d.adBreakdown.length){
+      let adHtml = '<div style="font-size:0.72rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.35rem">AD PERFORMANCE</div>';
+      d.adBreakdown.forEach((a,i) => {
+        adHtml += '<div class="broadcaster-row"><span>Slot '+(i+1)+': '+a.name+'</span><span><span style="color:#00e676">'+a.full_plays+' full</span> &middot; <span style="color:#ffd600">'+a.partial_plays+' partial</span></span></div>';
+      });
+      breakdownEl.innerHTML = adHtml;
+    }
+    if(d.topMatches && d.topMatches.length){
+      breakdownEl.innerHTML = '<div style="font-size:0.72rem;color:var(--muted);letter-spacing:0.08em;margin-bottom:0.35rem">TOP MATCHES</div>' +
+        d.topMatches.map(m => `
+          <div class="broadcaster-row">
+            <span>${m.p1} vs ${m.p2}</span>
+            <span style="color:var(--accent2)">${m.viewers} viewers</span>
+          </div>`).join('');
+    }
+  } catch(e) {
+    statsEl.innerHTML = `<div style="color:var(--error);font-size:0.82rem;grid-column:1/-1">${e.message}</div>`;
+  }
+}
+
+// ── APPROVED HIGHLIGHTS ───────────────────────────────────────────────────────────────────────────
+async function loadApprovedHighlights(){
+  const container = document.getElementById('approvedHighlights');
+  container.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">Loading…</div>';
+  document.getElementById('hlBulkBar').style.display = 'none';
+  try {
+    const r = await fetch('/api/highlights?all=1', {
+      headers: { Authorization: `Bearer ${await getToken()}` }
+    });
+    if(!r.ok){ container.innerHTML = '<div style="color:var(--error);font-size:0.82rem">Could not load.</div>'; return; }
+    const items = await r.json();
+    const approved = items.filter(h => h.status === 'approved');
+    if(!approved.length){
+      container.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">No approved highlights yet.</div>';
+      return;
+    }
+    document.getElementById('hlBulkBar').style.display = 'flex';
+    document.getElementById('hlSelectAll').checked = false;
+    updateHlSelCount();
+    container.innerHTML = approved.map(h => `
+      <div data-hl-id="${h.id}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;
+        background:var(--surface2);border:1px solid var(--border);border-radius:7px;margin-bottom:0.4rem;
+        transition:background 0.15s">
+        <input type="checkbox" class="hl-check" data-id="${h.id}" onchange="updateHlSelCount()"
+          style="width:15px;height:15px;accent-color:#ff4d6d;cursor:pointer;flex-shrink:0">
+        <img src="https://img.youtube.com/vi/${h.youtube_id}/mqdefault.jpg"
+          style="width:80px;height:45px;object-fit:cover;border-radius:4px;flex-shrink:0"/>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.title}</div>
+          <div style="font-size:0.68rem;color:var(--muted);margin-top:0.1rem">${h.submitted_by || 'Anonymous'} · ${new Date(h.submitted_at).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}</div>
+        </div>
+        <button onclick="removeHighlight('${h.id}')"
+          style="padding:0.4rem 0.75rem;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);
+          color:#ff4d6d;border-radius:6px;font-family:'Outfit',sans-serif;font-size:0.75rem;
+          font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">
+          Remove
+        </button>
+      </div>`).join('');
+  } catch(e) {
+    container.innerHTML = `<div style="color:var(--error);font-size:0.82rem">${e.message}</div>`;
+  }
+}
+
+function updateHlSelCount(){
+  const all   = [...document.querySelectorAll('.hl-check')];
+  const checked = all.filter(c => c.checked);
+  document.getElementById('hlSelCount').textContent = `${checked.length} selected`;
+  const btn = document.getElementById('hlDeleteBtn');
+  btn.disabled = checked.length === 0;
+  btn.style.opacity = checked.length ? '1' : '0.5';
+  btn.style.cursor  = checked.length ? 'pointer' : 'default';
+  document.getElementById('hlSelectAll').indeterminate = checked.length > 0 && checked.length < all.length;
+  document.getElementById('hlSelectAll').checked = all.length > 0 && checked.length === all.length;
+}
+
+function toggleSelectAllHighlights(checked){
+  document.querySelectorAll('.hl-check').forEach(c => c.checked = checked);
+  updateHlSelCount();
+}
+
+async function removeSelectedHighlights(){
+  const ids = [...document.querySelectorAll('.hl-check:checked')].map(c => c.dataset.id);
+  if(!ids.length) return;
+  if(!confirm(`Remove ${ids.length} highlight${ids.length>1?'s':''} from the public page?`)) return;
+  const btn = document.getElementById('hlDeleteBtn');
+  btn.disabled = true; btn.textContent = '⏳ Removing…';
+  try {
+    const r = await fetch('/api/highlights', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getToken()}` },
+      body: JSON.stringify({ ids, action: 'reject' })
+    });
+    if(!r.ok) throw new Error(await r.text());
+    loadApprovedHighlights();
+  } catch(e) {
+    alert('Error: ' + e.message);
+    btn.disabled = false; btn.textContent = '🗑 Delete Selected';
+  }
+}
+
+async function removeHighlight(id){
+  if(!confirm('Remove this highlight from the public page?')) return;
+  try {
+    const r = await fetch('/api/highlights', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getToken()}` },
+      body: JSON.stringify({ id, action: 'reject' })
+    });
+    if(!r.ok) throw new Error(await r.text());
+    loadApprovedHighlights();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── PENDING HIGHLIGHTS ───────────────────────────────────────────────────────────────────────────
+async function loadPendingHighlights(){
+  const container = document.getElementById('pendingHighlights');
+  container.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">Loading…</div>';
+  try {
+    const r = await fetch('/api/highlights?pending=1', {
+      headers: { Authorization: `Bearer ${await getToken()}` }
+    });
+    if(!r.ok){ container.innerHTML = '<div style="color:var(--error);font-size:0.82rem">Could not load.</div>'; return; }
+    const items = await r.json();
+    if(!items.length){
+      container.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">No pending highlights.</div>';
+      return;
+    }
+    container.innerHTML = items.map(h => `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:0.75rem">
+        <div style="position:relative;padding-bottom:40%;height:0;overflow:hidden">
+          <iframe src="https://www.youtube.com/embed/${h.youtube_id}"
+            style="position:absolute;top:0;left:0;width:100%;height:100%;border:none"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen loading="lazy"></iframe>
+        </div>
+        <div style="padding:0.85rem 1rem">
+          <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.15rem">${h.title}</div>
+          ${h.match_desc ? `<div style="font-size:0.72rem;color:var(--muted)">${h.match_desc}</div>` : ''}
+          <div style="font-size:0.68rem;color:#444;margin-top:0.2rem">${h.broadcaster_email}</div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.75rem">
+            <button onclick="reviewHighlight('${h.id}','approve')"
+              style="flex:1;padding:0.55rem;background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.25);
+              color:#00e676;border-radius:6px;font-family:'Outfit',sans-serif;font-weight:700;font-size:0.8rem;cursor:pointer">
+              ✓ Approve
+            </button>
+            <button onclick="reviewHighlight('${h.id}','reject')"
+              style="flex:1;padding:0.55rem;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);
+              color:#ff4d6d;border-radius:6px;font-family:'Outfit',sans-serif;font-weight:700;font-size:0.8rem;cursor:pointer">
+              ✗ Reject
+            </button>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    container.innerHTML = `<div style="color:var(--error);font-size:0.82rem">${e.message}</div>`;
+  }
+}
+
+async function reviewHighlight(id, action){
+  try {
+    const r = await fetch('/api/highlights', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getToken()}` },
+      body: JSON.stringify({ id, action })
+    });
+    if(!r.ok) throw new Error(await r.text());
+    loadPendingHighlights();
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+// ── BULK ADD HIGHLIGHTS ───────────────────────────────────────────────────────────────────────────
+async function bulkAddHighlights(){
+  const raw = document.getElementById('bulkUrlsInput').value.trim();
+  if(!raw){ alert('Paste at least one YouTube URL.'); return; }
+
+  const urls = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+  if(!urls.length){ alert('No valid lines found.'); return; }
+
+  const progressEl = document.getElementById('bulkProgress');
+  const submitBtn  = document.getElementById('bulkSubmitBtn');
+  progressEl.style.display = 'flex';
+  progressEl.innerHTML = `<div style="font-size:0.78rem;color:var(--muted)">Inserting ${urls.length} video${urls.length>1?'s':''}&hellip;</div>`;
+  submitBtn.disabled = true;
+  submitBtn.textContent = '⏳ Inserting…';
+
+  try {
+    const r = await fetch('/api/highlights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getToken()}` },
+      body: JSON.stringify({ urls })
+    });
+    if(!r.ok) throw new Error(await r.text());
+    const results = await r.json();
+
+    const ok  = results.filter(r => r.ok);
+    const bad = results.filter(r => !r.ok);
+
+    progressEl.innerHTML = results.map(res => `
+      <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;
+        padding:0.4rem 0.65rem;border-radius:5px;
+        background:${res.ok ? 'rgba(0,230,118,0.07)' : 'rgba(255,77,109,0.07)'};
+        border:1px solid ${res.ok ? 'rgba(0,230,118,0.18)' : 'rgba(255,77,109,0.18)'}">
+        <span style="font-size:0.85rem">${res.ok ? '✓' : '✗'}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)">${res.url}</span>
+        ${res.ok
+          ? `<span style="color:#00e676;font-weight:600;flex-shrink:0;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${res.title}</span>`
+          : `<span style="color:#ff4d6d;flex-shrink:0">${res.error || 'Failed'}</span>`
+        }
+      </div>`).join('') +
+      `<div style="font-size:0.78rem;margin-top:0.35rem;color:${bad.length ? '#ff4d6d' : '#00e676'}">
+        ${ok.length} inserted${bad.length ? `, ${bad.length} failed` : ' successfully'}.
+      </div>`;
+
+    if(ok.length) {
+      document.getElementById('bulkUrlsInput').value = '';
+      loadApprovedHighlights();
+    }
+  } catch(e) {
+    progressEl.innerHTML = `<div style="color:var(--error);font-size:0.82rem">Error: ${e.message}</div>`;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '⬆ Insert Videos';
+  }
+}
+
+// ── AD VIDEOS ───────────────────────────────────────────────────────────────────────────────
+async function loadAdVideos(){
+  const list = document.getElementById('adVideoList');
+  const r = await fetch('/api/media?type=all-ads', { headers: { Authorization: `Bearer ${await getToken()}` } });
+  const ads = r.ok ? await r.json() : [];
+  if(!ads.length){ list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">No ads uploaded yet.</div>'; return; }
+  list.innerHTML = ads.map(ad => `
+    <div style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.85rem;background:var(--surface2);border:1px solid var(--border);border-radius:7px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ad.name}</div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:0.15rem">
+          Slot ${ad.position} · <span style="color:#00e676">▶ ${ad.full_plays} full</span> · <span style="color:#ffd600">◑ ${ad.partial_plays} partial</span>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.72rem;color:var(--muted);cursor:pointer;flex-shrink:0">
+        <input type="checkbox" ${ad.active ? 'checked' : ''} onchange="toggleAd('${ad.id}',this.checked)" style="accent-color:#ff4d00"/> Active
+      </label>
+      <button onclick="deleteAd('${ad.id}')"
+        style="padding:0.35rem 0.65rem;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);color:#ff4d6d;border-radius:5px;font-size:0.72rem;cursor:pointer;flex-shrink:0">
+        Delete
+      </button>
+    </div>`).join('');
+}
+
+async function uploadAd(){
+  const name = document.getElementById('adName').value.trim();
+  const file = document.getElementById('adFile').files[0];
+  const statusEl = document.getElementById('adUploadStatus');
+  const btn = document.getElementById('adUploadBtn');
+  if(!name){ statusEl.textContent = 'Please enter a name.'; return; }
+  if(!file){ statusEl.textContent = 'Please choose a video file.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'Requesting upload URL…';
+
+  try {
+    // Step 1 — get signed upload URL (tiny request, no file data)
+    const token = await getToken();
+    const signRes = await fetch(`/api/media?type=sign-upload&name=${encodeURIComponent(name)}&mimeType=${encodeURIComponent(file.type)}&uploadType=ad`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    let signData; try { signData = await signRes.json(); } catch(e) { signData = {}; }
+    if(!signRes.ok) throw new Error(signData.error || 'Could not get upload URL');
+
+    // Step 2 — upload file directly to Supabase (bypasses Vercel size limits)
+    statusEl.textContent = 'Uploading video…';
+    const uploadRes = await fetch(signData.signedURL, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file
+    });
+    if(!uploadRes.ok) throw new Error(`Storage upload failed (${uploadRes.status})`);
+
+    // Step 3 — extract duration, save DB record
+    statusEl.textContent = 'Saving…';
+    let durationSeconds = null;
+    try {
+      durationSeconds = await new Promise(resolve => {
+        const tmp = document.createElement('video');
+        tmp.preload = 'metadata';
+        tmp.onloadedmetadata = () => { resolve(tmp.duration); URL.revokeObjectURL(tmp.src); };
+        tmp.onerror = () => resolve(null);
+        tmp.src = URL.createObjectURL(file);
+      });
+    } catch(e) {}
+
+    const saveRes = await fetch('/api/media?type=save-record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, filePath: signData.filePath, fileUrl: signData.fileUrl, mimeType: file.type, uploadType: 'ad', durationSeconds })
+    });
+    let saveData; try { saveData = await saveRes.json(); } catch(e) { saveData = {}; }
+    if(!saveRes.ok) throw new Error(saveData.error || 'Failed to save record');
+
+    statusEl.style.color = 'var(--success)'; statusEl.textContent = 'Ad uploaded successfully!';
+    document.getElementById('adName').value = '';
+    document.getElementById('adFile').value = '';
+    document.getElementById('adFileLabel').textContent = 'Choose video file (MP4/WebM)';
+    loadAdVideos();
+  } catch(err) {
+    statusEl.style.color = 'var(--error)'; statusEl.textContent = err.message;
+  }
+  btn.disabled = false; btn.textContent = 'Upload Ad';
+}
+
+async function toggleAd(id, active){
+  await fetch('/api/media?type=ads', { method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getToken()}` },
+    body: JSON.stringify({ id, active }) });
+  loadAdVideos();
+}
+
+async function deleteAd(id){
+  if(!confirm('Delete this ad permanently?')) return;
+  await fetch('/api/media?type=ads&id=' + id, { method: 'DELETE',
+    headers: { Authorization: `Bearer ${await getToken()}` } });
+  loadAdVideos();
+}
+
+// ── SPONSOR LOGOS ─────────────────────────────────────────────────────────────────────────────
+async function loadSponsorList(){
+  const list = document.getElementById('sponsorList');
+  const r = await fetch('/api/media?type=all-sponsors', { headers: { Authorization: `Bearer ${await getToken()}` } });
+  const sponsors = r.ok ? await r.json() : [];
+  if(!sponsors.length){ list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">No sponsors uploaded yet.</div>'; return; }
+  list.innerHTML = sponsors.map(s => `
+    <div style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.85rem;background:var(--surface2);border:1px solid var(--border);border-radius:7px">
+      <img src="${s.file_url}" style="width:48px;height:48px;object-fit:contain;border-radius:4px;background:#07090c;flex-shrink:0"/>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.82rem;font-weight:600">${s.name}</div>
+        <div style="font-size:0.68rem;color:var(--muted);margin-top:0.1rem">
+          ${s.tier === 'major' ? '<span style="color:#ff4d00">MAJOR</span>' : 'Community'} · 
+          <span style="color:#00c8ff">${s.clicks} clicks</span>
+          ${s.website_url ? ` · <a href="${s.website_url}" target="_blank" style="color:var(--muted)">${s.website_url.replace('https://','')}</a>` : ''}
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.72rem;color:var(--muted);cursor:pointer;flex-shrink:0">
+        <input type="checkbox" ${s.active ? 'checked' : ''} onchange="toggleSponsor('${s.id}',this.checked)" style="accent-color:#ff4d00"/> Active
+      </label>
+      <button onclick="deleteSponsor('${s.id}')"
+        style="padding:0.35rem 0.65rem;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);color:#ff4d6d;border-radius:5px;font-size:0.72rem;cursor:pointer;flex-shrink:0">
+        Delete
+      </button>
+    </div>`).join('');
+}
+
+async function uploadSponsor(){
+  const name = document.getElementById('sponsorName').value.trim();
+  const url = document.getElementById('sponsorUrl').value.trim();
+  const tier = document.getElementById('sponsorTier').value;
+  const file = document.getElementById('sponsorFile').files[0];
+  const statusEl = document.getElementById('sponsorUploadStatus');
+  const btn = document.getElementById('sponsorUploadBtn');
+  if(!name){ statusEl.textContent = 'Please enter a name.'; return; }
+  if(!file){ statusEl.textContent = 'Please choose an image.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'Requesting upload URL…';
+
+  try {
+    const token = await getToken();
+
+    // Step 1 — get signed upload URL
+    const signRes = await fetch(`/api/media?type=sign-upload&name=${encodeURIComponent(name)}&mimeType=${encodeURIComponent(file.type)}&uploadType=sponsor`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    let signData; try { signData = await signRes.json(); } catch(e) { signData = {}; }
+    if(!signRes.ok) throw new Error(signData.error || 'Could not get upload URL');
+
+    // Step 2 — upload directly to Supabase
+    statusEl.textContent = 'Uploading image…';
+    const uploadRes = await fetch(signData.signedURL, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file
+    });
+    if(!uploadRes.ok) throw new Error(`Storage upload failed (${uploadRes.status})`);
+
+    // Step 3 — save DB record
+    statusEl.textContent = 'Saving…';
+    const saveRes = await fetch('/api/media?type=save-record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, filePath: signData.filePath, fileUrl: signData.fileUrl, mimeType: file.type, uploadType: 'sponsor', tier, websiteUrl: url || null })
+    });
+    let saveData; try { saveData = await saveRes.json(); } catch(e) { saveData = {}; }
+    if(!saveRes.ok) throw new Error(saveData.error || 'Failed to save record');
+
+    statusEl.style.color = 'var(--success)'; statusEl.textContent = 'Sponsor uploaded successfully!';
+    document.getElementById('sponsorName').value = '';
+    document.getElementById('sponsorUrl').value = '';
+    document.getElementById('sponsorFile').value = '';
+    document.getElementById('sponsorFileLabel').textContent = 'Choose image (JPG/PNG)';
+    loadSponsorList();
+  } catch(err) {
+    statusEl.style.color = 'var(--error)'; statusEl.textContent = err.message;
+  }
+  btn.disabled = false; btn.textContent = 'Upload Sponsor';
+}
+
+// ── GAME WON SOUND ────────────────────────────────────────────────────────────────────────────
+async function loadGameSoundAdmin(){
+  const el = document.getElementById('gameSoundCurrent');
+  try {
+    const r = await fetch('/api/media?type=game-sound', { cache:'no-store' });
+    const d = r.ok ? await r.json() : {};
+    if(d.file_url){
+      el.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;
+          background:var(--surface2);border:1px solid var(--border);border-radius:7px">
+          <span style="font-size:1.2rem">🎵</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.name}</div>
+            <audio controls src="${d.file_url}" style="width:100%;height:28px;margin-top:0.25rem;accent-color:#ff4d00"></audio>
+          </div>
+          <button onclick="deleteGameSound('${d.id}')"
+            style="padding:0.35rem 0.65rem;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);
+            color:#ff4d6d;border-radius:6px;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">
+            Remove
+          </button>
+        </div>`;
+    } else {
+      el.textContent = 'No sound uploaded yet.';
+    }
+  } catch(e) { el.textContent = 'Could not load.'; }
+}
+
+async function uploadGameSound(){
+  const name = document.getElementById('gameSoundName').value.trim();
+  const file = document.getElementById('gameSoundFile').files[0];
+  const statusEl = document.getElementById('gameSoundStatus');
+  const btn = document.getElementById('gameSoundUploadBtn');
+  if(!name){ statusEl.textContent = 'Please enter a name.'; return; }
+  if(!file){ statusEl.textContent = 'Please choose an MP3 file.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Uploading...';
+  statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'Requesting upload URL…';
+
+  try {
+    const token = await getToken();
+    const mimeType = 'audio/mpeg';
+
+    const signRes = await fetch(`/api/media?type=sign-upload&name=${encodeURIComponent(name)}&mimeType=${encodeURIComponent(mimeType)}&uploadType=game-sound`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    let signData; try { signData = await signRes.json(); } catch(e) { signData = {}; }
+    if(!signRes.ok) throw new Error(signData.error || 'Could not get upload URL');
+
+    statusEl.textContent = 'Uploading audio…';
+    const uploadRes = await fetch(signData.signedURL, {
+      method: 'PUT', headers: { 'Content-Type': mimeType }, body: file
+    });
+    if(!uploadRes.ok) throw new Error(`Storage upload failed (${uploadRes.status})`);
+
+    statusEl.textContent = 'Saving…';
+    const saveRes = await fetch('/api/media?type=save-record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, filePath: signData.filePath, fileUrl: signData.fileUrl, mimeType, uploadType: 'game-sound' })
+    });
+    let saveData; try { saveData = await saveRes.json(); } catch(e) { saveData = {}; }
+    if(!saveRes.ok) throw new Error(saveData.error || 'Failed to save record');
+
+    statusEl.style.color = 'var(--success)'; statusEl.textContent = 'Sound uploaded!';
+    document.getElementById('gameSoundName').value = '';
+    document.getElementById('gameSoundFile').value = '';
+    document.getElementById('gameSoundFileLabel').textContent = 'Choose MP3 file';
+    loadGameSoundAdmin();
+  } catch(err) {
+    statusEl.style.color = 'var(--error)'; statusEl.textContent = err.message;
+  }
+  btn.disabled = false; btn.textContent = 'Upload Sound';
+}
+
+async function deleteGameSound(id){
+  if(!confirm('Remove this game sound?')) return;
+  await fetch(`/api/media?type=game-sounds&id=${id}`, {
+    method: 'DELETE', headers: { Authorization: `Bearer ${await getToken()}` }
+  });
+  loadGameSoundAdmin();
+}
+
+async function toggleSponsor(id, active){
+  await fetch('/api/media?type=sponsors', { method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getToken()}` },
+    body: JSON.stringify({ id, active }) });
+  loadSponsorList();
+}
+
+async function deleteSponsor(id){
+  if(!confirm('Delete this sponsor permanently?')) return;
+  await fetch('/api/media?type=sponsors&id=' + id, { method: 'DELETE',
+    headers: { Authorization: `Bearer ${await getToken()}` } });
+  loadSponsorList();
+}
+
+// Enter key on password field
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('authWall').style.display !== 'none') {
+    signIn();
+  }
+});
+</script>
+</body>
+</html>
