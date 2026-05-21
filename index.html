@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SquashLive — Live Matches</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090c;
+    --surface: #0f1318;
+    --surface2: #161c24;
+    --accent: #ff4d00;
+    --accent2: #00c8ff;
+    --green: #00e676;
+    --text: #f0f0f0;
+    --muted: #6b7280;
+    --border: rgba(255,255,255,0.07);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:0.4}
+
+  nav{display:flex;align-items:center;justify-content:space-between;padding:1.2rem 2.5rem;border-bottom:1px solid var(--border)}
+  .logo{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.05em;color:var(--text);display:flex;align-items:center;gap:0.5rem}
+  .logo span{color:var(--accent)}
+  .nav-right{display:flex;align-items:center;gap:1rem}
+  .host-btn{display:inline-flex;align-items:center;gap:0.6rem;background:var(--accent);color:#fff;font-family:'Outfit',sans-serif;font-weight:600;font-size:0.85rem;padding:0.65rem 1.4rem;border-radius:6px;text-decoration:none;transition:all 0.2s}
+  .host-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,77,0,0.35)}
+
+  .hero{padding:3.5rem 2.5rem 2rem;border-bottom:1px solid var(--border)}
+  .hero-inner{max-width:960px;margin:0 auto}
+  .overline{font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:0.2em;color:var(--accent);text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;gap:0.8rem}
+  .overline::before{content:'';display:block;width:1.5rem;height:1px;background:var(--accent)}
+  h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(3rem,6vw,5.5rem);line-height:0.92;letter-spacing:0.02em;margin-bottom:1rem}
+  h1 em{color:var(--accent);font-style:normal}
+  .hero-sub{margin-top:1.5rem;display:flex;flex-direction:column;gap:0.75rem;max-width:600px}
+  .hero-tag{display:flex;align-items:baseline;gap:0.65rem;opacity:0;animation:tagIn 0.5s ease forwards}
+  .hero-tag:nth-child(2){animation-delay:0.12s}
+  @keyframes tagIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .hero-tag-diamond{color:var(--accent);font-size:1.1rem;flex-shrink:0;line-height:1}
+  .hero-tag-text{font-family:'Outfit',sans-serif;font-size:clamp(1.05rem,2.2vw,1.3rem);font-weight:600;color:#e8e8e8;line-height:1.35}
+  .hero-tag-text em{font-style:normal;color:var(--accent2);font-weight:700}
+
+  .lobby{flex:1;padding:2.5rem 2.5rem 4rem;max-width:960px;margin:0 auto;width:100%}
+  .lobby-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+  .lobby-title{display:flex;align-items:center;gap:0.75rem}
+  .lobby-title h2{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.05em}
+  .live-count{font-family:'Space Mono',monospace;font-size:0.7rem;letter-spacing:0.08em;color:var(--accent);background:rgba(255,77,0,0.1);border:1px solid rgba(255,77,0,0.25);padding:0.2rem 0.6rem;border-radius:3px}
+  .refresh-btn{background:none;border:1px solid var(--border);color:var(--muted);font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;padding:0.4rem 0.85rem;border-radius:4px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:0.4rem}
+  .refresh-btn:hover{border-color:rgba(255,255,255,0.2);color:var(--text)}
+  .refresh-btn.spinning svg{animation:spin 0.6s linear}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
+
+  .room-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    overflow:hidden;cursor:pointer;
+    transition:border-color 0.2s,transform 0.2s,box-shadow 0.2s;
+    text-decoration:none;color:inherit;
+    display:block;position:relative;
+  }
+  .room-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(to right,var(--accent),var(--accent2));
+    opacity:0;transition:opacity 0.2s;
+  }
+  .room-card:hover{border-color:rgba(255,77,0,0.3);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.3)}
+  .room-card:hover::before{opacity:1}
+  .card-top{padding:1.25rem 1.25rem 1rem;display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+  .card-live-badge{display:flex;align-items:center;gap:0.35rem;font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;color:var(--accent);flex-shrink:0;margin-top:0.1rem}
+  .live-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1.2s ease infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+  .card-players{flex:1}
+  .matchup{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.03em;line-height:1.1}
+  .matchup .p1{color:var(--accent)}
+  .matchup .vs{color:var(--muted);font-size:1rem;margin:0 0.2rem}
+  .matchup .p2{color:var(--accent2)}
+  .card-bottom{padding:0.85rem 1.25rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .room-id-label{font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.06em;color:var(--muted)}
+  .watch-now{display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;font-weight:600;color:var(--accent);transition:gap 0.2s}
+  .room-card:hover .watch-now{gap:0.65rem}
+
+  .state-box{
+    border:1px dashed var(--border);border-radius:12px;
+    padding:4rem 2rem;text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:1rem;
+    grid-column:1/-1;
+  }
+  .state-icon{font-size:2rem;opacity:0.3}
+  .state-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.05em;color:var(--muted)}
+  .state-sub{font-size:0.85rem;color:var(--muted);line-height:1.6;max-width:360px}
+  .spinner{width:28px;height:28px;border:2px solid rgba(255,255,255,0.08);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite}
+
+  .divider{display:flex;align-items:center;gap:1rem;margin:2.5rem 0 1.5rem;color:var(--muted);font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase}
+  .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+  .manual-row{display:flex;gap:0.75rem;max-width:440px}
+  .manual-input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:0.9rem;letter-spacing:0.1em;padding:0.75rem 1rem;border-radius:6px;outline:none;text-transform:uppercase;transition:border-color 0.2s}
+  .manual-input:focus{border-color:rgba(0,200,255,0.4)}
+  .manual-input::placeholder{font-size:0.75rem;letter-spacing:0.05em;color:var(--muted)}
+  .manual-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-weight:600;font-size:0.85rem;padding:0.75rem 1.25rem;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all 0.2s}
+  .manual-btn:hover{border-color:rgba(0,200,255,0.4);color:var(--accent2)}
+
+  .content-section{border-top:1px solid var(--border);padding:3rem 2.5rem 4rem}
+  .content-section-inner{max-width:960px;margin:0 auto}
+  .section-head-row{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:2rem;gap:1rem;flex-wrap:wrap}
+  .section-overline{font-family:'Space Mono',monospace;font-size:0.62rem;letter-spacing:0.18em;color:var(--accent);text-transform:uppercase;margin-bottom:0.5rem;display:flex;align-items:center;gap:0.6rem}
+  .section-overline::before{content:'';display:block;width:1rem;height:1px;background:var(--accent)}
+  .section-title{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:0.03em;line-height:1}
+  .placeholder-block{border:1px dashed rgba(255,255,255,0.07);border-radius:12px;padding:3.5rem 2rem;text-align:center;display:flex;flex-direction:column;align-items:center;gap:0.85rem}
+  .placeholder-emoji{font-size:2rem;opacity:0.4}
+  .placeholder-heading{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.05em;color:var(--muted)}
+  .placeholder-body{font-size:0.85rem;color:var(--muted);line-height:1.65;max-width:440px}
+
+  @media(max-width:600px){
+    nav{padding:1rem 1.25rem}
+    .hero,.lobby{padding-left:1.25rem;padding-right:1.25rem}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="logo" style="text-decoration:none;color:inherit">Squash<span>Live</span></a>
+  <div class="nav-right">
+    <a href="admin.html" id="adminLink" style="display:none;font-family:'Outfit',sans-serif;font-size:0.8rem;font-weight:600;color:var(--accent);text-decoration:none;padding:0.4rem 0.75rem;border:1px solid rgba(255,77,0,0.3);border-radius:6px;transition:all 0.2s">
+      Admin
+    </a>
+    <a href="auth.html" class="host-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
+      Host a Match
+    </a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="overline">Live now</div>
+    <h1>Watch <em>Live</em><br>Squash</h1>
+    <div class="hero-sub">
+      <div class="hero-tag">
+        <span class="hero-tag-diamond">✦</span>
+        <span class="hero-tag-text">Live local squash with <em>slow-mo replays</em>, all in one place!</span>
+      </div>
+      <div class="hero-tag">
+        <span class="hero-tag-diamond">✦</span>
+        <span class="hero-tag-text">Browse the highlights below and <em>submit your own!</em></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lobby">
+  <div class="lobby-header">
+    <div class="lobby-title">
+      <h2>Live Matches</h2>
+      <div class="live-count" id="liveCount" style="display:none">0 LIVE</div>
+    </div>
+    <button class="refresh-btn" id="refreshBtn" onclick="loadRooms()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      REFRESH
+    </button>
+  </div>
+
+  <!-- Major sponsor -->
+  <div id="majorSponsorWrap" style="display:none" class="major-sponsor"></div>
+  <!-- Community sponsors -->
+  <div id="sponsorStrip" class="sponsor-strip" style="display:none"></div>
+  <div class="rooms-grid" id="roomsGrid">
+    <div class="state-box">
+      <div class="spinner"></div>
+      <div class="state-title">Scanning for live matches…</div>
+    </div>
+  </div>
+
+
+
+<div class="content-section" id="pastMatchesSection" style="display:none">
+  <div class="content-section-inner">
+    <div class="section-head-row">
+      <div>
+        <div class="section-overline">Recent results</div>
+        <h2 class="section-title" style="margin:0">Past Matches</h2>
+      </div>
+    </div>
+    <div id="pastMatchesGrid" class="rooms-grid"></div>
+  </div>
+</div>
+
+<div class="content-section" id="highlightsSection">
+  <div class="content-section-inner">
+    <div class="section-head-row">
+      <div>
+        <div class="section-overline">Community clips</div>
+        <h2 class="section-title">Highlights</h2>
+      </div>
+    </div>
+    <!-- Search bar -->
+    <div style="display:flex;gap:0.5rem;margin-bottom:1.25rem">
+      <input id="hlSearch" type="text" placeholder="Search by title or date e.g. May 2026..."
+        onkeydown="if(event.key==='Enter') searchHighlights()"
+        style="flex:1;background:#0f1318;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+        font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+        border-radius:7px;outline:none;transition:border-color 0.2s"/>
+      <button onclick="searchHighlights()"
+        style="padding:0.7rem 1.1rem;background:#ff4d00;color:#fff;border:none;border-radius:7px;
+        font-family:'Outfit',sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;
+        transition:all 0.2s;white-space:nowrap">
+        Search
+      </button>
+      <button onclick="clearSearch()"
+        style="padding:0.7rem 0.9rem;background:transparent;border:1px solid rgba(255,255,255,0.08);
+        color:#6b7280;border-radius:7px;font-family:'Outfit',sans-serif;font-size:0.85rem;cursor:pointer">
+        ✕
+      </button>
+    </div>
+    <div id="highlightsGrid" style="display:flex;flex-direction:column;gap:1.25rem">
+      <div class="placeholder-block">
+        <div class="placeholder-emoji">🎬</div>
+        <div class="placeholder-heading">No highlights yet</div>
+        <div class="placeholder-body">Approved clips will appear here.</div>
+      </div>
+    </div>
+
+    <!-- Submit highlight form -->
+    <div style="margin-top:2rem;padding:1.25rem 1.5rem;background:#0f1318;border:1px solid rgba(255,255,255,0.07);border-radius:12px;position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:15%;right:15%;height:1px;background:linear-gradient(to right,transparent,rgba(255,77,0,0.4),transparent)"></div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.05em;margin-bottom:0.25rem">Submit a Highlight</div>
+      <div style="font-size:0.78rem;color:#6b7280;margin-bottom:1rem;line-height:1.5">Upload your clip to YouTube first, then paste the link below. All submissions are reviewed before going live.</div>
+      <div style="display:flex;flex-direction:column;gap:0.6rem">
+        <input id="hlName" type="text" placeholder="Your name (optional)"
+          style="background:#161c24;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+          font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+          border-radius:7px;outline:none;width:100%;transition:border-color 0.2s"/>
+        <input id="hlTitle" type="text" placeholder="Highlight title e.g. 'Stunning backhand rally — Smith vs Jones'"
+          style="background:#161c24;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+          font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+          border-radius:7px;outline:none;width:100%;transition:border-color 0.2s"/>
+        <input id="hlUrl" type="text" placeholder="YouTube link e.g. https://youtu.be/abc123"
+          style="background:#161c24;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+          font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+          border-radius:7px;outline:none;width:100%;transition:border-color 0.2s"/>
+        <div id="hlStatus" style="font-size:0.78rem;color:#6b7280;min-height:1rem"></div>
+        <button onclick="submitHighlight()"
+          style="padding:0.8rem;background:#ff4d00;color:#fff;border:none;border-radius:7px;
+          font-family:'Outfit',sans-serif;font-weight:700;font-size:0.88rem;cursor:pointer;
+          transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:0.5rem"
+          id="hlSubmitBtn">
+          Submit for Review
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Supabase client — used only for admin session check
+(function(){
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+  s.onload = () => {
+    window._sb = window.supabase.createClient(
+      'https://bmhaihybdnaufprysjbw.supabase.co',
+      'sb_publishable_0QwuePBb2qNgaDR_5rI0Uw_DS_NpjSV'
+    );
+  };
+  document.head.appendChild(s);
+})();
+
+function titleCase(str) {
+  return str.toLowerCase().replace(/\w/g, c => c.toUpperCase());
+}
+
+function formatScore(room) {
+  if (!room.score) return '';
+  const s = room.score;
+  // Show games tally, then current points
+  return `${s.p1games}–${s.p2games} <span style="color:#555;font-size:0.7em">(${s.p1pts}–${s.p2pts})</span>`;
+}
+
+function timeSince(ts) {
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  return hrs + 'h ago';
+}
+
+// ── NEXT LIVE COUNTDOWNS (carousel) ──────────────────────────────────────────
+let _countdownIntervals = [];
+
+function _clearCountdowns(){
+  _countdownIntervals.forEach(clearInterval);
+  _countdownIntervals = [];
+}
+
+async function buildEmptyState(){
+  _clearCountdowns();
+
+  const base = `<div class="state-box">
+    <div class="state-icon">📡</div>
+    <div class="state-title">No Live Matches Right Now</div>
+    <div class="state-sub">Check back soon, or host your own match.</div>
+  </div>`;
+
+  // Fetch events array
+  let events = [];
+  try{
+    const { data } = await window._sb
+      .from('site_config').select('value').eq('key','next_live_events').single();
+    if(Array.isArray(data?.value)) events = data.value;
+  }catch(e){}
+
+  // Filter out past events
+  const now = Date.now();
+  events = events.filter(ev => new Date(ev.datetime) > now);
+  if(!events.length) return base;
+
+  // Build carousel slides
+  const slides = events.map((ev, i) => {
+    const eventName = ev.event
+      ? `<div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.08em;color:var(--text);margin-bottom:0.15rem">${ev.event}</div>`
+      : '';
+    return `<div class="nl-slide" style="min-width:100%;box-sizing:border-box;padding:0 0.25rem;text-align:center;display:flex;flex-direction:column;align-items:center;gap:0.4rem;">
+      <div class="state-icon">🎾</div>
+      ${eventName}
+      <div class="state-title" style="color:var(--text);font-size:1.1rem">Live In</div>
+      <div id="nlCountdown${i}" style="font-family:'Space Mono',monospace;font-size:1.3rem;color:var(--accent);letter-spacing:0.04em">--:--:--</div>
+    </div>`;
+  }).join('');
+
+  const dots = events.length > 1 ? `<div id="nlDots" style="display:flex;gap:0.4rem;justify-content:center;margin-top:0.4rem">
+    ${events.map((_,i)=>`<div class="nl-dot" data-idx="${i}" style="width:6px;height:6px;border-radius:50%;background:${i===0?'var(--accent)':'rgba(255,255,255,0.2)'};cursor:pointer;transition:background 0.2s;"></div>`).join('')}
+  </div>` : '';
+
+  const carouselHtml = `
+    <div class="state-box" style="gap:0.5rem;width:100%;overflow:hidden;">
+      <div id="nlTrack" style="display:flex;transition:transform 0.35s cubic-bezier(.4,0,.2,1);will-change:transform;">
+        ${slides}
+      </div>
+      ${dots}
+    </div>`;
+
+  // Start countdowns and carousel after DOM updates
+  setTimeout(()=>{
+    // Countdown tickers
+    events.forEach((ev, i) => {
+      const target = new Date(ev.datetime);
+      function tick(){
+        const el = document.getElementById('nlCountdown'+i);
+        if(!el){ clearInterval(timer); return; }
+        const diff = target - Date.now();
+        if(diff <= 0){ el.textContent = 'Starting soon!'; clearInterval(timer); return; }
+        const d = Math.floor(diff / 86400000);
+        const h = Math.floor((diff % 86400000) / 3600000);
+        const m = Math.floor((diff % 3600000)  / 60000);
+        const s = Math.floor((diff % 60000)    / 1000);
+        el.textContent = d > 0
+          ? `${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+          : `${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+      }
+      tick();
+      const timer = setInterval(tick, 1000);
+      _countdownIntervals.push(timer);
+    });
+
+    // Carousel swipe + dot nav
+    if(events.length > 1){
+      const track = document.getElementById('nlTrack');
+      const dotsEl = document.getElementById('nlDots');
+      let cur = 0;
+      function goTo(idx){
+        cur = Math.max(0, Math.min(events.length-1, idx));
+        track.style.transform = `translateX(-${cur*100}%)`;
+        dotsEl.querySelectorAll('.nl-dot').forEach((d,i)=>{
+          d.style.background = i===cur ? 'var(--accent)' : 'rgba(255,255,255,0.2)';
+        });
+      }
+      dotsEl.querySelectorAll('.nl-dot').forEach(d => d.onclick = ()=> goTo(+d.dataset.idx));
+      // Touch swipe
+      let sx = 0;
+      track.addEventListener('touchstart', e=>{ sx = e.touches[0].clientX; }, {passive:true});
+      track.addEventListener('touchend',   e=>{
+        const dx = e.changedTouches[0].clientX - sx;
+        if(Math.abs(dx) > 40) goTo(cur + (dx < 0 ? 1 : -1));
+      }, {passive:true});
+      // No auto-advance — user interaction only
+    }
+  }, 50);
+
+  return carouselHtml + base;
+}
+
+async function loadRooms() {
+  const grid = document.getElementById('roomsGrid');
+  const btn = document.getElementById('refreshBtn');
+  const countEl = document.getElementById('liveCount');
+
+  btn.classList.add('spinning');
+  grid.innerHTML = '<div class="state-box"><div class="spinner"></div><div class="state-title">Scanning…</div></div>';
+
+  try {
+    const [liveRes, pastRes] = await Promise.all([
+      fetch('/api/rooms', { cache: 'no-store' }),
+      fetch('/api/rooms?past=1', { cache: 'no-store' })
+    ]);
+    if (!liveRes.ok) throw new Error('HTTP ' + liveRes.status);
+    const rooms = await liveRes.json();
+    const past = pastRes.ok ? await pastRes.json() : [];
+    btn.classList.remove('spinning');
+
+    const active = rooms.filter(r => !r.banned);
+
+    // ── Live matches ──────────────────────────────────────────────────────────
+    if (active.length === 0) {
+      countEl.style.display = 'none';
+      grid.innerHTML = await buildEmptyState();
+    } else {
+      countEl.textContent = active.length + ' LIVE';
+      countEl.style.display = 'inline-flex';
+      grid.innerHTML = '';
+
+      active.forEach((room, i) => {
+        grid.appendChild(buildLiveCard(room, i));
+      });
+    }
+
+    // Past matches and score updates handled by silentRefresh()
+
+  } catch(e) {
+    grid.innerHTML = `<div class="state-box"><div class="state-icon">📡</div><div class="state-title">Could not load matches</div><div class="state-sub">Check your connection and try refreshing.</div></div>`;
+    document.getElementById('refreshBtn').classList.remove('spinning');
+  }
+}
+
+function joinManual() {
+  const val = document.getElementById('manualCode').value.trim();
+  if (val) window.location.href = 'watch.html?room=' + encodeURIComponent(val);
+  else document.getElementById('manualCode').focus();
+}
+
+// ── Score HTML builder (shared by full render + silent update) ────────────────
+function buildScoreHtml(s) {
+  const p1g = s.p1games > 0 ? `<span style="font-size:0.6em;color:rgba(255,77,0,0.55);margin-left:0.1rem">(${s.p1games})</span>` : '';
+  const p2g = s.p2games > 0 ? `<span style="font-size:0.6em;color:rgba(0,200,255,0.55);margin-left:0.1rem">(${s.p2games})</span>` : '';
+  return `<div class="card-score-live" style="display:flex;align-items:baseline;gap:0.5rem;margin-top:0.3rem">
+    <span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;color:#ff4d00;letter-spacing:0.03em">${s.p1pts}${p1g}</span>
+    <span style="color:#333;font-size:0.9rem">–</span>
+    <span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;color:#00c8ff;letter-spacing:0.03em">${s.p2pts}${p2g}</span>
+  </div>`;
+}
+
+// ── Silent refresh — NEVER rebuilds the grid, only patches DOM in-place ───────
+function buildLiveCard(room, i) {
+  const card = document.createElement('a');
+  card.href = 'watch.html?room=' + encodeURIComponent(room.id);
+  card.className = 'room-card';
+  card.dataset.roomId = room.id;
+  card.style.animationDelay = (i * 0.05) + 's';
+  const scoreHtml = room.score ? buildScoreHtml(room.score) : '';
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="card-players">
+        <div class="matchup">
+          <span class="p1">${titleCase(room.p1)}</span>
+          <span class="vs">vs</span>
+          <span class="p2">${titleCase(room.p2)}</span>
+        </div>
+        ${scoreHtml}
+      </div>
+      <div class="card-live-badge"><div class="live-dot"></div>LIVE</div>
+    </div>
+    <div class="card-bottom">
+      <div class="room-id-label">${room.id}</div>
+      <div class="watch-now">Watch now <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12,5 19,12 12,19"/></svg></div>
+    </div>`;
+  return card;
+}
+
+async function silentRefresh() {
+  try {
+    const [liveRes, pastRes] = await Promise.all([
+      fetch('/api/rooms', { cache: 'no-store' }),
+      fetch('/api/rooms?past=1', { cache: 'no-store' })
+    ]);
+    if (!liveRes.ok) return;
+    const rooms = await liveRes.json();
+    const past = pastRes.ok ? await pastRes.json() : [];
+    const active = rooms.filter(r => !r.banned);
+    const activeIds = new Set(active.map(r => r.id));
+    const grid = document.getElementById('roomsGrid');
+    const countEl = document.getElementById('liveCount');
+
+    // Is the grid currently showing the empty-state placeholder?
+    const isEmpty = !!grid.querySelector('.state-box');
+
+    if (active.length === 0 && !isEmpty) {
+      // All matches ended — show empty state without full reload flash
+      countEl.style.display = 'none';
+      grid.innerHTML = await buildEmptyState();
+    } else if (active.length > 0) {
+      if (isEmpty) {
+        // Matches appeared — build grid from scratch (no skeleton, direct insert)
+        grid.innerHTML = '';
+        active.forEach((room, i) => grid.appendChild(buildLiveCard(room, i)));
+      } else {
+        // Update existing cards in-place
+        active.forEach(room => {
+          let card = grid.querySelector(`[data-room-id="${room.id}"]`);
+          if (!card) {
+            // New room appeared mid-session
+            card = buildLiveCard(room, grid.children.length);
+            grid.appendChild(card);
+          } else if (room.score) {
+            // Update score element in-place — find the existing one or create it
+            let scoreEl = card.querySelector('.card-score-live');
+            if (!scoreEl) {
+              scoreEl = document.createElement('div');
+              scoreEl.className = 'card-score-live';
+              const matchup = card.querySelector('.matchup');
+              if (matchup) matchup.after(scoreEl);
+            }
+            // Rebuild just the inner score content
+            const s = room.score;
+            const p1g = s.p1games > 0 ? `<span style="font-size:0.6em;color:rgba(255,77,0,0.55);margin-left:0.1rem">(${s.p1games})</span>` : '';
+            const p2g = s.p2games > 0 ? `<span style="font-size:0.6em;color:rgba(0,200,255,0.55);margin-left:0.1rem">(${s.p2games})</span>` : '';
+            scoreEl.style.cssText = "display:flex;align-items:baseline;gap:0.5rem;margin-top:0.3rem";
+            scoreEl.innerHTML = `<span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;color:#ff4d00;letter-spacing:0.03em">${s.p1pts}${p1g}</span><span style="color:#333;font-size:0.9rem">–</span><span style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;line-height:1;color:#00c8ff;letter-spacing:0.03em">${s.p2pts}${p2g}</span>`;
+          }
+        });
+        // Remove cards for rooms that ended
+        grid.querySelectorAll('[data-room-id]').forEach(card => {
+          if (!activeIds.has(card.dataset.roomId)) card.remove();
+        });
+      }
+      countEl.textContent = active.length + ' LIVE';
+      countEl.style.display = 'inline-flex';
+    }
+
+    // ── Past matches — update in-place ────────────────────────────────────────
+    const pastSection = document.getElementById('pastMatchesSection');
+    const pastGrid = document.getElementById('pastMatchesGrid');
+    if (past.length === 0) {
+      pastSection.style.display = 'none';
+    } else {
+      pastSection.style.display = 'block';
+      // Only re-render if count changed (new match completed)
+      const currentCount = pastGrid.querySelectorAll('.room-card').length;
+      if (currentCount !== past.length) {
+        pastGrid.innerHTML = '';
+        past.forEach((m, i) => {
+          const card = document.createElement('div');
+          card.className = 'room-card';
+          card.style.cssText = 'cursor:default;animation-delay:' + (i*0.04) + 's';
+          const chips = (m.gameHistory || []).map(h => {
+            const p1win = h.winner === 1;
+            return `<span style="font-family:'Space Mono',monospace;font-size:0.58rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:4px;padding:0.18rem 0.45rem;white-space:nowrap"><span style="color:#777;font-size:0.5rem">G${h.game} </span><span style="color:${p1win?'#ff4d00':'#888'}">${h.p1pts}</span><span style="color:#333">–</span><span style="color:${p1win?'#888':'#00c8ff'}">${h.p2pts}</span></span>`;
+          }).join('');
+          card.innerHTML = `
+            <div class="card-top">
+              <div class="card-players">
+                <div class="matchup">
+                  <span class="p1" style="${m.winner===1?'':'opacity:0.4'}">${titleCase(m.p1)}</span>
+                  <span class="vs">vs</span>
+                  <span class="p2" style="${m.winner===2?'':'opacity:0.4'}">${titleCase(m.p2)}</span>
+                </div>
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.05em;margin-top:0.25rem">
+                  <span style="color:${m.winner===1?'#ff4d00':'#555'}">${m.p1games}</span>
+                  <span style="color:#333;margin:0 0.2rem">–</span>
+                  <span style="color:${m.winner===2?'#00c8ff':'#555'}">${m.p2games}</span>
+                  <span style="font-family:'Space Mono',monospace;font-size:0.5rem;color:#555;letter-spacing:0.08em;margin-left:0.3rem">games · Best of ${m.bestOf}</span>
+                </div>
+              </div>
+              <div style="font-family:'Space Mono',monospace;font-size:0.5rem;letter-spacing:0.08em;color:#555;white-space:nowrap;align-self:flex-start">${timeSince(m.completedAt)}</div>
+            </div>
+            ${chips ? `<div style="display:flex;flex-wrap:wrap;gap:0.3rem;padding:0.4rem 0 0.1rem">${chips}</div>` : ''}
+            <div class="card-bottom" style="margin-top:0.25rem">
+              <div style="font-size:0.72rem;color:#6b7280">🏆 ${titleCase(m.winnerName)} wins</div>
+            </div>`;
+          pastGrid.appendChild(card);
+        });
+      }
+    }
+  } catch(e) { /* silent */ }
+}
+
+// ── SPONSORS ──────────────────────────────────────────────────────────────────
+async function loadSponsors(){
+  try {
+    const r = await fetch('/api/media?type=sponsors', { cache: 'no-store' });
+    if(!r.ok) return;
+    const sponsors = await r.json();
+    const major = sponsors.filter(s => s.tier === 'major');
+    const community = sponsors.filter(s => s.tier === 'community');
+
+    const majorWrap = document.getElementById('majorSponsorWrap');
+    if(major.length){
+      majorWrap.style.display = 'block';
+      const s = major[0];
+      majorWrap.innerHTML = `
+        <div style="font-family:'Space Mono',monospace;font-size:0.55rem;letter-spacing:0.15em;color:#555;margin-bottom:0.5rem">MAJOR SPONSOR</div>
+        <img src="${s.file_url}" alt="${s.name}" style="max-width:500px;width:100%;border-radius:10px;cursor:${s.website_url?'pointer':'default'}"
+          onclick="${s.website_url ? `trackAndVisit('${s.id}','${s.website_url}')` : ''}"/>`;
+    } else {
+      majorWrap.style.display = 'none';
+    }
+
+    const strip = document.getElementById('sponsorStrip');
+    if(community.length){
+      strip.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:0.75rem;padding:0.75rem 0';
+      strip.innerHTML = community.map(s => `
+        <img src="${s.file_url}" alt="${s.name}"
+          style="height:56px;width:auto;max-width:160px;object-fit:contain;display:block;${s.website_url ? 'cursor:pointer' : ''}"
+          title="${s.name}"
+          ${s.website_url ? `onclick="trackAndVisit('${s.id}','${s.website_url}')"` : ''}/>`).join('');
+    } else {
+      strip.style.display = 'none';
+    }
+  } catch(e) { /* silent */ }
+}
+
+function trackAndVisit(id, url){
+  fetch('/api/media?type=sponsor-click', { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ id }) }).catch(()=>{});
+  // Ensure absolute URL
+  const dest = url.startsWith('http') ? url : 'https://' + url;
+  window.open(dest, '_blank');
+}
+
+// ── HIGHLIGHTS ────────────────────────────────────────────────────────────────
+let allHighlights = []; // cached for client-side search
+
+function renderHighlights(list){
+  const grid = document.getElementById('highlightsGrid');
+  if(!list.length){
+    grid.innerHTML = `<div class="placeholder-block">
+      <div class="placeholder-emoji">🎬</div>
+      <div class="placeholder-heading">No highlights found</div>
+      <div class="placeholder-body">Try a different search term.</div>
+    </div>`;
+    return;
+  }
+  // Newest first
+  const sorted = [...list].sort((a,b) => new Date(b.submitted_at) - new Date(a.submitted_at));
+  grid.innerHTML = sorted.map(h => {
+    const date = new Date(h.submitted_at);
+    const dateStr = date.toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' });
+    return `
+      <div style="border-radius:10px;overflow:hidden;background:#0f1318;border:1px solid rgba(255,255,255,0.07)">
+        <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden">
+          <iframe src="https://www.youtube.com/embed/${h.youtube_id}"
+            style="position:absolute;top:0;left:0;width:100%;height:100%;border:none"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen loading="lazy"></iframe>
+        </div>
+        <div style="padding:0.85rem 1rem">
+          <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.2rem">${h.title}</div>
+          ${h.match_desc ? `<div style="font-size:0.75rem;color:#6b7280">${h.match_desc}</div>` : ''}
+          <div style="display:flex;gap:0.75rem;margin-top:0.35rem;align-items:center">
+            <div style="font-size:0.68rem;color:#444">${dateStr}</div>
+            ${h.submitted_by && h.submitted_by !== 'Anonymous' ? `<div style="font-size:0.68rem;color:#444">· ${h.submitted_by}</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function searchHighlights(){
+  const q = document.getElementById('hlSearch').value.trim().toLowerCase();
+  if(!q){ renderHighlights(allHighlights); return; }
+  const filtered = allHighlights.filter(h => {
+    const date = new Date(h.submitted_at);
+    const dateStr = date.toLocaleDateString('en-AU', { day:'numeric', month:'long', year:'numeric' }).toLowerCase();
+    const monthYear = date.toLocaleDateString('en-AU', { month:'long', year:'numeric' }).toLowerCase();
+    return h.title.toLowerCase().includes(q)
+      || (h.match_desc || '').toLowerCase().includes(q)
+      || dateStr.includes(q)
+      || monthYear.includes(q);
+  });
+  renderHighlights(filtered);
+}
+
+function clearSearch(){
+  document.getElementById('hlSearch').value = '';
+  renderHighlights(allHighlights);
+}
+
+async function loadHighlights(){
+  try {
+    const r = await fetch('/api/highlights', { cache: 'no-store' });
+    if(!r.ok) return;
+    allHighlights = await r.json();
+    renderHighlights(allHighlights);
+  } catch(e) { /* silent */ }
+}
+
+async function submitHighlight(){
+  const name = document.getElementById('hlName').value.trim();
+  const title = document.getElementById('hlTitle').value.trim();
+  const url = document.getElementById('hlUrl').value.trim();
+  const statusEl = document.getElementById('hlStatus');
+  const btn = document.getElementById('hlSubmitBtn');
+
+  statusEl.style.color = '#6b7280';
+  if(!title){ statusEl.textContent = 'Please add a title.'; return; }
+  if(!url){ statusEl.textContent = 'Please paste a YouTube URL.'; return; }
+  if(!url.includes('youtube') && !url.includes('youtu.be')){ statusEl.textContent = 'Please paste a valid YouTube URL.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  try {
+    const r = await fetch('/api/highlights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtube_url: url, title, match_desc: '', broadcaster_email: name || 'Anonymous' })
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Submission failed');
+    statusEl.style.color = '#00c8ff';
+    statusEl.textContent = '✓ Submitted! We will review it shortly.';
+    document.getElementById('hlName').value = '';
+    document.getElementById('hlTitle').value = '';
+    document.getElementById('hlUrl').value = '';
+  } catch(e) {
+    statusEl.style.color = '#ff4d6d';
+    statusEl.textContent = e.message;
+  }
+  btn.disabled = false; btn.textContent = 'Submit for Review';
+}
+
+window.onload = async () => {
+  loadRooms();
+  loadHighlights();
+  loadSponsors();
+  setInterval(silentRefresh, 2000);
+
+  // Show admin link if logged in as admin
+  try {
+    const { data: { session } } = await window._sb.auth.getSession();
+    if(session && session.user.email.toLowerCase() === 'swpage89@gmail.com'){
+      document.getElementById('adminLink').style.display = 'inline-flex';
+    }
+  } catch(e) {}
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('manualCode').addEventListener('keydown', e => {
+    if (e.key === 'Enter') joinManual();
+  });
+});
+</script>
+
+</body>
+</html>

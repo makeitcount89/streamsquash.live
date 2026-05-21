@@ -1,0 +1,2214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SquashLive — Broadcast</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#07090c;--surface:#0f1318;--surface2:#161c24;
+  --accent:#ff4d00;--accent2:#00c8ff;--green:#00e676;
+  --text:#f0f0f0;--muted:#6b7280;--border:rgba(255,255,255,0.07);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;flex-direction:column;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity:0.4}
+
+/* NAV */
+nav{
+  display:flex;align-items:center;gap:1rem;
+  padding:1rem 1.75rem;border-bottom:1px solid var(--border);
+  position:relative;z-index:1;
+}
+.nav-logo{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:0.06em}
+.nav-logo span{color:var(--accent)}
+.nav-email{font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.06em;
+  color:var(--muted);margin-left:auto}
+.nav-signout{
+  background:none;border:1px solid var(--border);color:var(--muted);
+  font-family:'Outfit',sans-serif;font-size:0.72rem;padding:0.35rem 0.85rem;
+  border-radius:5px;cursor:pointer;transition:all 0.2s;display:none;
+}
+.nav-signout:hover{border-color:rgba(255,255,255,0.18);color:var(--text)}
+
+/* MAIN CONTENT */
+main{flex:1;padding:2rem 1.75rem 4rem;max-width:960px;width:100%;margin:0 auto;
+  position:relative;z-index:1;}
+
+/* SETUP */
+#setupView{display:flex;flex-direction:column;gap:1.5rem}
+.setup-header{margin-bottom:0.5rem}
+.page-overline{
+  font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;
+  color:var(--accent);text-transform:uppercase;margin-bottom:0.65rem;
+  display:flex;align-items:center;gap:0.6rem;
+}
+.page-overline::before{content:'';display:block;width:1rem;height:1px;background:var(--accent)}
+.page-title{font-family:'Bebas Neue',sans-serif;font-size:2.4rem;letter-spacing:0.03em;
+  line-height:1}
+.setup-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:1.5rem;display:flex;flex-direction:column;gap:1.1rem;
+}
+.field{display:flex;flex-direction:column;gap:0.4rem}
+.field-label{font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.12em;
+  color:var(--muted);text-transform:uppercase}
+.field input,.field select{
+  background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  font-family:'Outfit',sans-serif;font-size:0.95rem;
+  padding:0.7rem 1rem;border-radius:8px;outline:none;width:100%;
+  transition:border-color 0.2s;
+}
+.field input:focus,.field select:focus{border-color:rgba(255,77,0,0.4)}
+.field select option{background:var(--surface2)}
+.go-live-btn{
+  width:100%;padding:0.95rem 1rem;border-radius:8px;border:none;
+  background:var(--accent);color:#fff;font-family:'Outfit',sans-serif;
+  font-weight:700;font-size:1rem;cursor:pointer;transition:all 0.2s;
+  display:flex;align-items:center;justify-content:center;gap:0.6rem;
+}
+.go-live-btn:hover{background:#e04400;transform:translateY(-1px);
+  box-shadow:0 8px 24px rgba(255,77,0,0.35)}
+.go-live-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none}
+.consent-block{display:flex;flex-direction:column;gap:0.55rem;padding:0.85rem 1rem;background:rgba(255,77,0,0.05);border:1px solid rgba(255,77,0,0.15);border-radius:8px}
+.consent-item{display:flex;align-items:flex-start;gap:0.65rem;cursor:pointer}
+.consent-item input[type=checkbox]{width:15px;height:15px;margin-top:0.15rem;flex-shrink:0;accent-color:#ff4d00;cursor:pointer}
+.consent-item span{font-size:0.78rem;color:#c0c0c0;line-height:1.5}
+.consent-item strong{color:#f0f0f0}
+.status-line{
+  font-family:'Space Mono',monospace;font-size:0.7rem;letter-spacing:0.04em;
+  color:var(--muted);padding:0.75rem 1rem;background:var(--surface);
+  border:1px solid var(--border);border-radius:8px;
+}
+
+/* LIVE VIEW */
+#liveView{display:none;flex-direction:column;gap:1.25rem}
+.live-header{display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap}
+.live-badge{
+  display:flex;align-items:center;gap:0.4rem;
+  font-family:'Space Mono',monospace;font-size:0.62rem;letter-spacing:0.15em;
+  color:var(--accent);background:rgba(255,77,0,0.1);
+  border:1px solid rgba(255,77,0,0.25);padding:0.2rem 0.65rem;border-radius:3px;
+}
+.quality-stack{display:flex;flex-direction:column;align-items:center;gap:0.1rem}
+.quality-label{font-family:'Space Mono',monospace;font-size:0.55rem;letter-spacing:0.08em;color:var(--accent);opacity:0.75}
+.quality-select{font-family:'Space Mono',monospace;font-size:0.62rem;letter-spacing:0.06em;
+  color:var(--muted);background:rgba(255,255,255,0.05);border:1px solid var(--border);
+  border-radius:4px;padding:0.1rem 0.25rem;cursor:pointer;outline:none}
+.quality-select:focus{border-color:var(--accent)}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);
+  animation:pulse 1.2s ease infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.viewer-count{font-family:'Space Mono',monospace;font-size:0.7rem;letter-spacing:0.05em;
+  color:var(--muted)}
+.end-btn{
+  margin-left:auto;background:rgba(255,255,255,0.05);border:1px solid var(--border);
+  color:var(--muted);font-family:'Outfit',sans-serif;font-weight:500;font-size:0.78rem;
+  padding:0.4rem 0.9rem;border-radius:6px;cursor:pointer;transition:all 0.2s;
+}
+.end-btn:hover{border-color:rgba(220,38,38,0.4);color:#fca5a5;
+  background:rgba(220,38,38,0.07)}
+
+/* Two-column layout: big video left, controls right */
+.live-body{
+  display:grid;
+  grid-template-columns:2fr 320px;
+  gap:1.25rem;
+  align-items:start;
+}
+video{
+  width:100%;border-radius:10px;background:#000;
+  aspect-ratio:16/9;object-fit:contain;
+  border:1px solid var(--border);
+  min-height:min(50vh, 100%);
+}
+.live-controls{display:flex;flex-direction:column;gap:1rem;max-height:calc(100vh - 2rem);overflow-y:auto}
+
+@media(max-width:900px){
+  .live-body{grid-template-columns:1fr}
+  video{
+    min-height:50vh;
+    aspect-ratio:unset;
+    height:50vh;
+    object-fit:cover;
+  }
+  .live-controls{max-height:none;overflow-y:visible}
+}
+
+/* SCOREBOARD */
+.score-section-label{
+  font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.15em;
+  color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:0.5rem;
+}
+.score-section-label::before{content:'';flex:1;max-width:1.5rem;height:1px;background:var(--border)}
+.score-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.65rem}
+.player-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:1rem;text-align:center;display:flex;flex-direction:column;gap:0.5rem;
+}
+.player-card.p1{border-top:2px solid var(--accent)}
+.player-card.p2{border-top:2px solid var(--accent2)}
+.player-card-name{
+  font-family:'Space Mono',monospace;font-size:0.58rem;letter-spacing:0.1em;
+  color:var(--muted);text-transform:uppercase;
+}
+.player-card-pts{
+  font-family:'Bebas Neue',sans-serif;font-size:3.5rem;
+  line-height:1;letter-spacing:0.02em;
+}
+.player-card.p1 .player-card-pts{color:var(--accent)}
+.player-card.p2 .player-card-pts{color:var(--accent2)}
+.player-card-games{
+  font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.05em;color:var(--muted)}
+.score-btns{display:flex;gap:0.4rem;justify-content:center}
+.score-btn{
+  width:36px;height:36px;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--text);font-size:1rem;
+  cursor:pointer;transition:all 0.15s;display:flex;align-items:center;justify-content:center;
+  font-family:'Outfit',sans-serif;font-weight:600;
+}
+.score-btn:hover{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15)}
+.score-btn.plus-p1{background:rgba(255,77,0,0.15);border-color:rgba(255,77,0,0.3);color:var(--accent)}
+.score-btn.plus-p1:hover{background:rgba(255,77,0,0.25)}
+.score-btn.plus-p2{background:rgba(0,200,255,0.12);border-color:rgba(0,200,255,0.25);color:var(--accent2)}
+.score-btn.plus-p2:hover{background:rgba(0,200,255,0.22)}
+
+.game-actions{display:grid;grid-template-columns:1fr 1fr;gap:0.65rem}
+.game-btn{
+  padding:0.7rem 0.5rem;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--muted);font-family:'Outfit',sans-serif;
+  font-weight:600;font-size:0.8rem;cursor:pointer;transition:all 0.2s;
+}
+.game-btn:hover{background:rgba(255,255,255,0.06);color:var(--text);border-color:rgba(255,255,255,0.15)}
+.reset-btn{
+  width:100%;padding:0.65rem;border-radius:8px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);font-family:'Space Mono',monospace;
+  font-size:0.7rem;letter-spacing:0.06em;cursor:pointer;transition:all 0.2s;
+}
+.reset-btn:hover{color:var(--text);border-color:rgba(255,255,255,0.15)}
+
+/* GAME HISTORY */
+.game-history{display:flex;flex-direction:column;gap:0.35rem}
+.game-history-label{font-family:'Space Mono',monospace;font-size:0.55rem;letter-spacing:0.15em;color:var(--muted);text-transform:uppercase;margin-top:0.25rem}
+.game-history-row{display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0.65rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:0.04em}
+.game-history-row .gh-game{color:var(--muted);font-size:0.55rem;letter-spacing:0.1em}
+.game-history-row .gh-score{font-family:'Bebas Neue',sans-serif;font-size:1rem;letter-spacing:0.05em}
+.game-history-row .gh-score .gh-p1{color:var(--accent)}
+.game-history-row .gh-score .gh-p2{color:var(--accent2)}
+.game-history-row .gh-winner{font-size:0.55rem;color:var(--muted)}
+
+/* RECORDING */
+.rec-btn{
+  display:flex;align-items:center;gap:0.45rem;
+  background:rgba(255,255,255,0.05);border:1px solid var(--border);
+  color:var(--muted);font-family:'Outfit',sans-serif;font-weight:500;font-size:0.78rem;
+  padding:0.4rem 0.9rem;border-radius:6px;cursor:pointer;transition:all 0.2s;
+}
+.rec-btn:hover{border-color:rgba(255,255,255,0.18);color:var(--text)}
+.rec-btn.recording{
+  background:rgba(220,38,38,0.12);border-color:rgba(220,38,38,0.35);
+  color:#fca5a5;
+}
+.rec-btn .rec-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background 0.2s;
+}
+.rec-btn.recording .rec-dot{background:#f87171;animation:rec-pulse 1s ease infinite}
+@keyframes rec-pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+.rec-timer{font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:0.06em}
+/* BAN MODAL */
+#banModal{
+  position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);
+  display:none;align-items:center;justify-content:center;padding:1.5rem;
+}
+#banModal.open{display:flex}
+.ban-card{
+  background:var(--surface);border:1px solid rgba(220,38,38,0.3);
+  border-radius:14px;padding:2rem;max-width:380px;width:100%;
+  text-align:center;display:flex;flex-direction:column;align-items:center;gap:0.9rem;
+}
+.ban-card::before{
+  content:'';display:block;width:60px;height:2px;
+  background:linear-gradient(to right,transparent,#dc2626,transparent);
+  border-radius:2px;
+}
+.ban-icon{font-size:2.5rem}
+.ban-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.04em;color:#fca5a5}
+.ban-sub{font-size:0.83rem;color:var(--muted);line-height:1.65}
+.ban-home{
+  display:inline-flex;align-items:center;gap:0.5rem;margin-top:0.25rem;
+  background:rgba(255,255,255,0.06);border:1px solid var(--border);
+  color:var(--text);font-size:0.82rem;font-weight:500;
+  padding:0.65rem 1.25rem;border-radius:6px;text-decoration:none;transition:all 0.2s;
+}
+.ban-home:hover{border-color:rgba(255,255,255,0.2)}
+</style>
+
+  <meta name="theme-color" content="#ff4d00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SquashLive">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-logo" style="text-decoration:none;color:inherit">Squash<span>Live</span></a>
+  <span class="nav-email" id="hostEmailDisplay"></span>
+  <button class="nav-signout" id="signOutBtn" onclick="signOut()">Sign Out</button>
+</nav>
+
+<main>
+  <!-- SETUP -->
+  <div id="setupView">
+    <div class="setup-header">
+      <div class="page-overline">Host Dashboard</div>
+      <h1 class="page-title">Go Live</h1>
+    </div>
+
+    <!-- Resume incomplete match prompt — collapsed by default, click header to expand -->
+    <div id="resumeCard" style="display:none;flex-direction:column;gap:0;
+      background:rgba(255,77,0,0.07);border:1px solid rgba(255,77,0,0.3);
+      border-radius:12px;overflow:hidden;">
+      <button onclick="toggleResumeCard()" style="display:flex;align-items:center;justify-content:space-between;
+        width:100%;background:none;border:none;padding:1rem 1.25rem;cursor:pointer;text-align:left;">
+        <div style="font-family:'Space Mono',monospace;font-size:0.62rem;letter-spacing:0.1em;color:var(--accent);">INCOMPLETE MATCHES</div>
+        <span id="resumeChevron" style="color:var(--accent);font-size:0.8rem;transition:transform 0.2s;">▼</span>
+      </button>
+      <div id="resumeBody" style="display:none;flex-direction:column;gap:0.6rem;padding:0 1.25rem 1rem;">
+        <div id="resumeList" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
+        <button onclick="dismissResume()" style="align-self:flex-start;background:none;border:none;
+          color:#6b7280;font-family:'Outfit',sans-serif;font-size:0.8rem;cursor:pointer;padding:0;margin-top:0.25rem;">
+          Dismiss ×
+        </button>
+      </div>
+    </div>
+
+    <div class="setup-card" style="padding-top:1rem;">
+      <div style="font-family:'Space Mono',monospace;font-size:0.62rem;letter-spacing:0.1em;color:#6b7280;margin-bottom:0.85rem;">NEW MATCH</div>
+      <div class="field">
+        <div class="field-label">Player 1</div>
+        <input id="p1" maxlength="20" placeholder="Player 1 name"/>
+      </div>
+      <div class="field">
+        <div class="field-label">Player 2</div>
+        <input id="p2" maxlength="20" placeholder="Player 2 name"/>
+      </div>
+      <div class="field">
+        <div class="field-label">Format</div>
+        <select id="bestOf">
+          <option value="3">Best of 3</option>
+          <option value="5" selected>Best of 5</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Video Source</div>
+        <select id="videoSource">
+          <option value="camera">Camera &amp; Microphone</option>
+          <option value="screen">Screen Share (with audio)</option>
+        </select>
+      </div>
+      <div class="consent-block">
+        <label class="consent-item">
+          <input type="checkbox" id="consent1" onchange="updateConsentBtn()">
+          <span>All players have given their <strong>informed consent</strong> to be live streamed. For junior players under 18, parental or guardian consent has been obtained and is held on file by the club.</span>
+        </label>
+        <label class="consent-item">
+          <input type="checkbox" id="consent2" onchange="updateConsentBtn()">
+          <span>I confirm this stream is a <strong>legitimate squash match</strong>. I will not broadcast any inappropriate, harmful, or non-squash content.</span>
+        </label>
+        <label class="consent-item">
+          <input type="checkbox" id="consent3" onchange="updateConsentBtn()">
+          <span>I accept <strong>full responsibility</strong> for the content I broadcast and confirm it complies with SquashLive's terms of use.</span>
+        </label>
+      </div>
+      <button class="go-live-btn" id="goLiveBtn" onclick="go()" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        Go Live
+      </button>
+    </div>
+    <div class="status-line" id="setupStatus">Ready — choose a source to go live.</div>
+  </div>
+
+  <!-- LIVE VIEW -->
+  <div id="liveView">
+    <!-- Room share info -->
+    <div class="setup-card" id="shareInfo" style="padding:1rem 1.5rem;gap:0.6rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+        <div>
+          <div class="field-label" style="margin-bottom:0.25rem">Room Code</div>
+          <div id="roomDisplay" style="font-family:'Space Mono',monospace;font-size:0.9rem;letter-spacing:0.1em;color:var(--accent)"></div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="field-label" style="margin-bottom:0.25rem">Watch Link</div>
+          <div id="linkDisplay" style="font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:0.03em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        </div>
+        <button onclick="copyLink()" style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Outfit',sans-serif;font-size:0.8rem;padding:0.5rem 1rem;border-radius:6px;cursor:pointer;transition:all 0.2s" id="copyBtn">Copy Link</button>
+      </div>
+    </div>
+    <div class="live-header">
+      <div class="quality-stack">
+        <select id="qualitySelect" class="quality-select" onchange="changeQuality(this.value)">
+          <option value="auto">Auto</option>
+          <option value="4k">4K</option>
+          <option value="1080p">1080p</option>
+          <option value="720p">720p</option>
+          <option value="480p">480p</option>
+        </select>
+        <span id="qualityLabel" class="quality-label"></span>
+        <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+      </div>
+      <span class="viewer-count" id="viewerCount">0 viewers</span>
+      <button class="rec-btn" id="recBtn" onclick="toggleRecord()">
+        <span class="rec-dot"></span>
+        <span id="recBtnLabel">Record</span>
+        <span class="rec-timer" id="recTimer" style="display:none">00:00</span>
+      </button>
+      <button id="replayBtn" onclick="triggerReplay()" style="
+        display:none;align-items:center;gap:0.4rem;
+        background:rgba(0,200,255,0.12);border:1px solid rgba(0,200,255,0.35);
+        color:#00c8ff;font-family:'Space Mono',monospace;font-size:0.62rem;
+        letter-spacing:0.08em;padding:0.45rem 0.9rem;border-radius:6px;cursor:pointer;
+        transition:all 0.2s;" title="Send instant replay to all viewers">
+        ⏪ INSTANT REPLAY
+      </button>
+      <button class="end-btn" id="flipBtn" onclick="flipCamera()" style="display:none" title="Switch camera">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
+          <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+        </svg>
+        Flip Camera
+      </button>
+      <button class="end-btn" onclick="confirmEnd()">End Stream</button>
+    </div>
+
+    <div class="live-body">
+      <video id="localVideo" autoplay muted playsinline></video>
+
+      <div class="live-controls">
+        <div class="score-section-label">Scoreboard</div>
+
+        <div class="score-grid">
+          <div class="player-card p1">
+            <div class="player-card-name" id="p1Name">P1</div>
+            <div class="player-card-pts" id="p1Pts">0</div>
+            <div class="player-card-games" id="p1Games">0 games</div>
+            <div class="score-btns">
+              <button class="score-btn" onclick="adj(1,-1)">−</button>
+              <button class="score-btn plus-p1" onclick="adj(1,1)">+</button>
+            </div>
+          </div>
+          <div class="player-card p2">
+            <div class="player-card-name" id="p2Name">P2</div>
+            <div class="player-card-pts" id="p2Pts">0</div>
+            <div class="player-card-games" id="p2Games">0 games</div>
+            <div class="score-btns">
+              <button class="score-btn" onclick="adj(2,-1)">−</button>
+              <button class="score-btn plus-p2" onclick="adj(2,1)">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-actions">
+          <button class="game-btn" onclick="gameWon(1)">🏆 P1 Wins Game</button>
+          <button class="game-btn" onclick="gameWon(2)">🏆 P2 Wins Game</button>
+        </div>
+        <div class="game-actions" style="margin-top:-0.3rem">
+          <button class="game-btn" id="undoGameBtn" onclick="confirmUndo()" style="grid-column:1/-1;opacity:0.45;font-size:0.78rem;padding:0.5rem" disabled>↩ Undo Last Game Win</button>
+        </div>
+
+        <button class="reset-btn" onclick="confirmReset()">↺ Reset Points</button>
+
+        <button id="ringConfigBtn" onclick="startRingConfig()" class="reset-btn" style="margin-top:0.35rem">Bluetooth remote - configure</button>
+        <div id="ringStatus" style="display:none;text-align:center;font-size:0.63rem;font-family:'Space Mono',monospace;color:#6b7280;margin-top:-0.15rem;letter-spacing:0.04em"></div>
+
+        <div class="game-history" id="gameHistory" style="display:none">
+          <div class="game-history-label">Finished Games</div>
+          <div id="gameHistoryRows"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Ban Modal -->
+<div id="banModal">
+  <div class="ban-card">
+    <div class="ban-icon">⛔</div>
+    <div class="ban-title">Stream Removed</div>
+    <p class="ban-sub">Your stream received multiple flags for inappropriate content and has been automatically taken down. Your account has been suspended pending review. A notification has been sent to the admin.</p>
+    <a href="index.html" class="ban-home">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg>
+      Back to SquashLive
+    </a>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://bmhaihybdnaufprysjbw.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_0QwuePBb2qNgaDR_5rI0Uw_DS_NpjSV';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let peer, localStream, roomId, banPollInterval;
+let dataConns = [], activeCalls = [];
+const calledPeers = new Set();
+const score = { p1:{pts:0,games:0}, p2:{pts:0,games:0}, bestOf:5, game:1 };
+let p1name = 'Player 1', p2name = 'Player 2';
+const gameHistory = []; // [{game, p1pts, p2pts, winner}]
+const pointLogs   = []; // parallel to gameHistory — pointLogs[i] = [{scorer:'p1'|'p2'}]
+let   currentPointLog = []; // accumulates points for the game in progress
+let   gameSoundUrl = null;  // loaded from /api/media?type=game-sound at startup
+let   _gameWonAudio = null; // reference so we can stop it on Players Ready
+// ── RELAY TREE SYSTEM ─────────────────────────────────────────────────────────
+// Ternary tree: broadcaster is root, every viewer is a relay node.
+// Broadcaster directly calls its CHILDREN_PER_NODE children (level 1).
+// Each viewer automatically relays the stream to up to CHILDREN_PER_NODE children.
+// BFS insertion always fills the shallowest available slot first.
+// On departure, orphaned children are immediately re-parented at the shallowest
+// available positions, minimising chain disruption.
+const CHILDREN_PER_NODE = 3;
+const ROOT = '__root__';
+const tree = { [ROOT]: { parent: null, children: new Set(), level: 0 } };
+const pingTimes  = {};  // peerId → avg RTT ms
+const pingTimers = {};  // peerId → setInterval ID
+
+// Add peerId to the tree, finding the shallowest available slot (BFS).
+// Works for new peers AND for reparenting orphans already in the tree.
+// Returns the assigned parent ID (ROOT = broadcaster calls directly).
+function treeAdd(peerId){
+  // Build the orphan's subtree set to avoid creating cycles
+  const skipSet = new Set();
+  const sq = [peerId];
+  while(sq.length){
+    const n = sq.shift();
+    skipSet.add(n);
+    if(tree[n]) tree[n].children.forEach(c => sq.push(c));
+  }
+  const queue   = [ROOT];
+  const visited = new Set();
+  while(queue.length){
+    const nodeId = queue.shift();
+    if(visited.has(nodeId) || skipSet.has(nodeId)) continue;
+    visited.add(nodeId);
+    const node = tree[nodeId];
+    if(!node) continue;
+    if(node.children.size < CHILDREN_PER_NODE){
+      node.children.add(peerId);
+      if(tree[peerId]){
+        tree[peerId].parent = nodeId;
+        tree[peerId].level  = node.level + 1;
+      } else {
+        tree[peerId] = { parent: nodeId, children: new Set(), level: node.level + 1 };
+      }
+      return nodeId;
+    }
+    node.children.forEach(c => { if(!skipSet.has(c)) queue.push(c); });
+  }
+  return null;
+}
+
+// Remove peerId from tree. Returns its immediate children (orphans to re-parent).
+// Does NOT remove the orphans — their subtrees remain intact.
+function treeRemove(peerId){
+  if(!tree[peerId]) return [];
+  const parentId = tree[peerId].parent;
+  if(parentId && tree[parentId]) tree[parentId].children.delete(peerId);
+  const orphans = [...tree[peerId].children];
+  orphans.forEach(o => { if(tree[o]) tree[o].parent = null; }); // detach parent ref
+  delete tree[peerId];
+  return orphans;
+}
+
+// Re-parent a list of orphan peer IDs. Inserts each at the shallowest available
+// slot and notifies them via their still-open broadcaster data channel.
+function treeReparent(orphans){
+  orphans.forEach(orphanId => {
+    const parentId = treeAdd(orphanId);
+    if(!parentId) return;
+    const conn = dataConns.find(dc => dc.peer === orphanId && dc.open);
+    if(!conn) return;
+    if(parentId === ROOT){
+      // Broadcaster calls this viewer directly
+      try{ conn.send({type:'direct-upgrade'}); }catch(e){}
+      calledPeers.add(orphanId);
+      const call = peer.call(orphanId, localStream);
+      activeCalls.push(call);
+      console.log('Reparented', orphanId, '→ broadcaster direct');
+      call.on('close', ()=> handlePeerLeave(orphanId, call));
+      call.on('error', ()=> handlePeerLeave(orphanId, call));
+    } else {
+      try{ conn.send({type:'cohost-redirect', peerId: parentId}); }catch(e){}
+      console.log('Reparented', orphanId, '→', parentId, '(level', tree[orphanId]?.level+')');
+    }
+  });
+  updateViewers();
+}
+
+// Central departure handler — called on both call.on('close') and conn.on('close').
+const _leavingPeers = new Set(); // guard against double handlePeerLeave calls
+function handlePeerLeave(peerId, call){
+  if(_leavingPeers.has(peerId)) return;
+  _leavingPeers.add(peerId);
+  setTimeout(()=> _leavingPeers.delete(peerId), 5000); // clean up after 5s
+
+  if(call) activeCalls = activeCalls.filter(c => c !== call);
+  calledPeers.delete(peerId);
+  clearInterval(pingTimers[peerId]);
+  delete pingTimers[peerId];
+  delete pingTimes[peerId];
+  const orphans = treeRemove(peerId);
+  console.log('Peer left:', peerId, orphans.length ? '— reparenting '+orphans.length+' children' : '(leaf)');
+  if(orphans.length) treeReparent(orphans);
+  else updateViewers();
+}
+
+// Auth guard
+(async()=>{
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session){ window.location.href='auth.html'; return; }
+  document.getElementById('hostEmailDisplay').textContent = session.user.email;
+  document.getElementById('signOutBtn').style.display = 'block';
+  checkIncompleteMatches(); // show resume prompt if any recent incomplete matches exist
+})();
+
+async function signOut(){ await sb.auth.signOut(); window.location.href='auth.html'; }
+
+function slugify(n){ return n.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12)||'PLAYER'; }
+
+// Returns true only when the device reports a WiFi connection with ≥10 Mbps downlink.
+// navigator.connection is supported on Android Chrome; absent on Safari/Firefox → conservative default.
+function isStrongWifi() {
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!conn) return false;
+  return conn.type === 'wifi' && conn.downlink >= 10;
+}
+
+const QUALITY_MAP = {
+  '480p':  { width: { max: 854  }, height: { max: 480  } },
+  '720p':  { width: { max: 1280 }, height: { max: 720  } },
+  '1080p': { width: { max: 1920 }, height: { max: 1080 } },
+  '4k':    {},
+};
+let manualQuality = 'auto';
+
+// Returns video constraints. Manual pick overrides auto; auto caps at 720p unless on strong WiFi.
+function videoConstraints(extra = {}) {
+  if (manualQuality !== 'auto') return { ...extra, ...QUALITY_MAP[manualQuality] };
+  if (isStrongWifi()) return extra;
+  return { ...extra, width: { max: 1280 }, height: { max: 720 } };
+}
+
+function updateQualityLabel() {
+  const track = localStream && localStream.getVideoTracks()[0];
+  const el = document.getElementById('qualityLabel');
+  if (!el) return;
+  if (!track) { el.textContent = ''; return; }
+  const { height } = track.getSettings();
+  if (!height) { el.textContent = ''; return; }
+  el.textContent = height >= 2160 ? '4K' : height >= 1080 ? '1080p' : height >= 720 ? '720p' : '480p';
+}
+
+async function changeQuality(quality) {
+  manualQuality = quality;
+  if (!localStream) return;
+  const sel = document.getElementById('qualitySelect');
+  sel.disabled = true;
+  try {
+    localStream.getVideoTracks().forEach(t => { localStream.removeTrack(t); t.stop(); });
+    let newStream;
+    try {
+      newStream = await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints({ facingMode: { ideal: currentFacingMode } }), audio: false
+      });
+    } catch(e) {
+      newStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints(), audio: false });
+    }
+    const newTrack = newStream.getVideoTracks()[0];
+    if (!newTrack) throw new Error('No video track returned');
+    localStream.addTrack(newTrack);
+    const vid = document.getElementById('localVideo');
+    vid.srcObject = null;
+    vid.srcObject = localStream;
+    for (const call of activeCalls) {
+      const pc = call.peerConnection;
+      if (!pc) continue;
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      if (sender) await sender.replaceTrack(newTrack);
+    }
+    setTimeout(updateQualityLabel, 500);
+  } catch(e) {
+    console.warn('changeQuality failed:', e.message);
+    alert('Could not change quality: ' + e.message);
+  }
+  sel.disabled = false;
+}
+
+function updateConsentBtn(){
+  const all = ['consent1','consent2','consent3'].every(id => document.getElementById(id).checked);
+  document.getElementById('goLiveBtn').disabled = !all;
+}
+
+let heartbeatInterval = null;
+
+async function go() {
+  const p1val = document.getElementById('p1').value.trim()||'Player 1';
+  const p2val = document.getElementById('p2').value.trim()||'Player 2';
+  p1name = p1val; p2name = p2val;
+  score.bestOf = parseInt(document.getElementById('bestOf').value);
+  const source = document.getElementById('videoSource').value;
+
+  const btn = document.getElementById('goLiveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Checking authorisation…';
+
+  // Check approval every time Go Live is pressed — catches banned hosts
+  // who are still logged in from a previous session
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      document.getElementById('setupStatus').textContent = 'Session expired. Please sign in again.';
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" fill="none" stroke="currentColor" stroke-width="2"/></svg>Go Live`;
+      setTimeout(() => { window.location.href = 'auth.html'; }, 2000);
+      return;
+    }
+    const email = session.user.email;
+    const r = await fetch('/api/check-approved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await r.json();
+    if (!data.approved) {
+      document.getElementById('setupStatus').textContent = 'Your hosting access has been removed. Contact the administrator.';
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" fill="none" stroke="currentColor" stroke-width="2"/></svg>Go Live`;
+      await sb.auth.signOut();
+      return;
+    }
+  } catch(e) {
+    document.getElementById('setupStatus').textContent = 'Could not verify authorisation. Check your connection.';
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" fill="none" stroke="currentColor" stroke-width="2"/></svg>Go Live`;
+    return;
+  }
+
+  btn.textContent = source === 'screen' ? 'Starting screen share…' : 'Starting camera…';
+
+  // Fix 6: Support both camera and screen share. Default to rear camera.
+  try {
+    if (source === 'screen') {
+      localStream = await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+    } else {
+      // Try rear camera first (environment), fall back to any camera
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints({ facingMode: { ideal: 'environment' } }), audio: true
+        });
+      } catch(e) {
+        localStream = await navigator.mediaDevices.getUserMedia({video: videoConstraints(), audio:true});
+      }
+    }
+  } catch(e){
+    document.getElementById('setupStatus').textContent = 'Error: '+e.message;
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" fill="none" stroke="currentColor" stroke-width="2"/></svg>Go Live`;
+    return;
+  }
+
+  document.getElementById('localVideo').srcObject = localStream;
+  setTimeout(updateQualityLabel, 800);
+  startRollingBuffer();
+  loadGameSound();
+
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand=''; for(let i=0;i<4;i++) rand+=chars[Math.floor(Math.random()*chars.length)];
+  roomId = _resumedFromId || ('SQLV-'+slugify(p1val)+'-VS-'+slugify(p2val)+'-'+rand);
+  _resumedFromId = null; // clear after use
+  _incompleteStartedAt = _incompleteStartedAt || new Date().toISOString();
+
+  document.getElementById('p1Name').textContent = p1val.toUpperCase();
+  document.getElementById('p2Name').textContent = p2val.toUpperCase();
+  // Fix 1 (JS side): these elements now exist in HTML
+  document.getElementById('roomDisplay').textContent = roomId;
+
+  const watchUrl = location.origin + location.pathname.replace('broadcast.html','watch.html') + '?room=' + roomId;
+  document.getElementById('linkDisplay').textContent = watchUrl;
+  window._watchUrl = watchUrl;
+
+  document.getElementById('setupView').style.display = 'none';
+  document.getElementById('liveView').style.display = 'flex';
+  // Only show flip button for camera (not screen share)
+  if(source === 'camera') document.getElementById('flipBtn').style.display = 'flex';
+
+  // Register room
+  fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:roomId,p1:p1val,p2:p2val,bestOf:score.bestOf,
+      score:{p1games:0,p2games:0,p1pts:0,p2pts:0,game:1}
+    })}).catch(()=>{});
+
+  // Fix 3: Send heartbeat every 30s to keep room alive (TTL is 60s)
+  // Must include currentViewers/peakViewers/totalViewerJoins — omitting them resets the DB column to 0
+  heartbeatInterval = setInterval(()=>{
+    if(!roomId) return;
+    const n = Math.max(0, Object.keys(tree).length - 1);
+    fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:roomId,p1:p1val,p2:p2val,bestOf:score.bestOf,
+        score:{p1games:score.p1.games,p2games:score.p2.games,p1pts:score.p1.pts,p2pts:score.p2.pts,game:score.game},
+        currentViewers: n,
+        peakViewers: _maxViewers,
+        totalViewerJoins: _totalViewerJoins
+      })}).catch(()=>{});
+  }, 8000);
+
+  // Fix 5: Register broadcaster email for flag/ban system
+  const {data:{session}} = await sb.auth.getSession();
+  if(session?.user?.email){
+    fetch('/api/register-stream',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({roomId, broadcasterEmail: session.user.email})}).catch(()=>{});
+  }
+
+  peer = new Peer(roomId, {
+    config:{iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'}
+    ]}
+  });
+
+  peer.on('open', ()=> startBanPolling());
+
+  // Reconnect to PeerJS signalling server if we lose the connection (network blip etc.)
+  peer.on('disconnected', ()=>{
+    console.warn('PeerJS signalling disconnected — reconnecting…');
+    if(!peer.destroyed) peer.reconnect();
+  });
+
+  peer.on('connection', conn => {
+    dataConns.push(conn);
+    conn.on('open', ()=>{
+      conn.send({type:'init', score:{...score, p1name, p2name, gameHistory}});
+
+      // RTT measurement
+      pingTimes[conn.peer]  = 999;
+      pingTimers[conn.peer] = setInterval(()=>{
+        if(conn.open) try{ conn.send({type:'ping', ts: Date.now()}); }catch(e){}
+      }, 10000);
+      try{ conn.send({type:'ping', ts: Date.now()}); }catch(e){}
+
+      // Already in the tree or being directly called — skip
+      if(tree[conn.peer] || calledPeers.has(conn.peer)) return;
+
+      // ── RELAY TREE ROUTING ─────────────────────────────────────────────────
+      const parentId = treeAdd(conn.peer);
+      if(!parentId){ console.warn('Tree full — no slot for', conn.peer); return; }
+
+      if(parentId === ROOT){
+        // Level 1: broadcaster calls this viewer directly
+        calledPeers.add(conn.peer);
+        const call = peer.call(conn.peer, localStream);
+        activeCalls.push(call);
+        console.log('Direct call → viewer', conn.peer, '(level 1, slot '+calledPeers.size+'/'+CHILDREN_PER_NODE+')');
+        call.on('close', ()=> handlePeerLeave(conn.peer, call));
+        call.on('error', ()=> handlePeerLeave(conn.peer, call));
+      } else {
+        // Level 2+: redirect viewer to their relay parent
+        try{ conn.send({type:'cohost-redirect', peerId: parentId}); }catch(e){}
+        console.log('Relayed viewer', conn.peer, '→', parentId, '(level', tree[conn.peer]?.level+')');
+      }
+      updateViewers();
+    });
+
+    // Handle pong replies and viewer reconnect requests
+    conn.on('data', d=>{
+      if(d.type === 'pong' && d.ts){
+        const rtt = Date.now() - d.ts;
+        pingTimes[conn.peer] = pingTimes[conn.peer] === 999
+          ? rtt : Math.round(pingTimes[conn.peer]*0.7 + rtt*0.3);
+      }
+      if(d.type === 'reconnect-request'){
+        // Viewer lost video — re-route them in the tree
+        console.log('reconnect-request from', conn.peer);
+        const orphans = treeRemove(conn.peer);
+        calledPeers.delete(conn.peer);
+        if(orphans.length) treeReparent(orphans);
+        const parentId = treeAdd(conn.peer);
+        if(!parentId) return;
+        if(parentId === ROOT){
+          calledPeers.add(conn.peer);
+          const rc = peer.call(conn.peer, localStream);
+          activeCalls.push(rc);
+          rc.on('close', ()=> handlePeerLeave(conn.peer, rc));
+          rc.on('error', ()=> handlePeerLeave(conn.peer, rc));
+          updateViewers();
+        } else {
+          try{ conn.send({type:'cohost-redirect', peerId: parentId}); }catch(e){}
+        }
+        console.log('reconnect-request: re-routed', conn.peer, '→', parentId);
+      }
+    });
+
+    conn.on('close',()=>{
+      dataConns = dataConns.filter(c=>c!==conn);
+      handlePeerLeave(conn.peer, null);
+    });
+  });
+
+  peer.on('error', err => console.error('Peer error:', err));
+}
+
+// ─── BAN POLLING ───────────────────────────────────────────────────────────────
+// Fix 2: Use /api/stream-status (which checks stream_bans table) instead of
+// /api/rooms which never sets a banned field.
+function startBanPolling(){
+  banPollInterval = setInterval(async ()=>{
+    if(!roomId) return;
+    try {
+      const res = await fetch('/api/stream-status?roomId='+encodeURIComponent(roomId), {cache:'no-store'});
+      if(!res.ok) return;
+      const data = await res.json();
+      if(data.banned){
+        clearInterval(banPollInterval);
+        handleBanned();
+      }
+    } catch(e){ /* silent */ }
+  }, 12000);
+}
+
+function handleBanned(){
+  // Notify all viewers
+  dataConns.forEach(c=>{ try{ if(c.open) c.send({type:'banned'}); }catch(e){} });
+  // Stop stream
+  if(localStream) localStream.getTracks().forEach(t=>t.stop());
+  if(peer) peer.destroy();
+  // Show ban modal (don't redirect — let user read the message)
+  document.getElementById('banModal').classList.add('open');
+}
+
+let _maxViewers = 0;
+let _totalViewerJoins = 0; // cumulative count of every viewer who joined
+let _viewerPushTimer = null;
+
+let _prevViewerCount = 0;
+
+function updateViewers(){
+  const n = Math.max(0, Object.keys(tree).length - 1); // all tree nodes minus ROOT
+  document.getElementById('viewerCount').textContent = n + ' viewer'+(n===1?'':'s');
+
+  if(n > _prevViewerCount) _totalViewerJoins += (n - _prevViewerCount);
+  _prevViewerCount = n;
+  if(n > _maxViewers) _maxViewers = n;
+
+  clearTimeout(_viewerPushTimer);
+  _viewerPushTimer = setTimeout(()=>{
+    if(!roomId) return;
+    fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        id:roomId, p1:p1name, p2:p2name, bestOf:score.bestOf,
+        score:{p1games:score.p1.games,p2games:score.p2.games,p1pts:score.p1.pts,p2pts:score.p2.pts,game:score.game},
+        currentViewers: n,
+        peakViewers: _maxViewers,
+        totalViewerJoins: _totalViewerJoins
+      })}).catch(()=>{});
+  }, 1000);
+}
+
+let _scorePushTimer = null;
+let _incompleteSaveTimer = null;
+let _incompleteStartedAt = null;
+let _resumedFromId = null; // ID of the incomplete match we resumed, if any
+
+// Save full match state to incomplete_matches on every point (debounced 2s)
+async function saveIncompleteMatch(){
+  if(!roomId || !p1name || !p2name) return;
+  const {data:{session}} = await sb.auth.getSession().catch(()=>({data:{session:null}}));
+  if(!session) return;
+  fetch('/api/incomplete-matches', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({
+      id: roomId,
+      p1: p1name, p2: p2name,
+      bestOf: score.bestOf,
+      scoreState: {
+        p1: { pts: score.p1.pts, games: score.p1.games },
+        p2: { pts: score.p2.pts, games: score.p2.games },
+        game: score.game,
+        gameHistory: [...gameHistory]
+      },
+      startedAt: _incompleteStartedAt || new Date().toISOString()
+    })
+  }).catch(()=>{});
+}
+
+// Delete incomplete match record — called on proper completion or manual dismiss
+async function deleteIncompleteMatch(id){
+  const {data:{session}} = await sb.auth.getSession().catch(()=>({data:{session:null}}));
+  if(!session) return;
+  fetch(`/api/incomplete-matches?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${session.access_token}` }
+  }).catch(()=>{});
+}
+
+// Load and show resume card on page load
+async function checkIncompleteMatches(){
+  const {data:{session}} = await sb.auth.getSession().catch(()=>({data:{session:null}}));
+  if(!session) return;
+  try{
+    const r = await fetch('/api/incomplete-matches', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` }
+    });
+    if(!r.ok) return;
+    const matches = await r.json();
+    if(!matches.length) return;
+
+    const list = document.getElementById('resumeList');
+    list.innerHTML = '';
+    matches.forEach(m => {
+      const ago = _timeAgo(new Date(m.updatedAt));
+      const s = m.scoreState || {};
+      const scoreStr = `${s.p1?.games||0}–${s.p2?.games||0} in games, ${s.p1?.pts||0}–${s.p2?.pts||0} pts (Game ${s.game||1})`;
+      const div = document.createElement('div');
+      div.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;';
+      div.innerHTML = `
+        <div>
+          <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:0.95rem;color:#f0f0f0;">
+            ${m.p1} vs ${m.p2}
+          </div>
+          <div style="font-family:'Space Mono',monospace;font-size:0.6rem;color:#6b7280;margin-top:0.2rem;">
+            ${scoreStr} · ${ago}
+          </div>
+        </div>
+        <button onclick="resumeMatch(${JSON.stringify(m).replace(/"/g,'&quot;')})" style="
+          padding:0.45rem 1rem;background:var(--accent);color:#fff;border:none;
+          border-radius:6px;font-family:'Outfit',sans-serif;font-weight:700;
+          font-size:0.82rem;cursor:pointer;white-space:nowrap;">
+          Resume
+        </button>
+      `;
+      list.appendChild(div);
+    });
+    document.getElementById('resumeCard').style.display = 'flex';
+    document.getElementById('resumeCard').style.flexDirection = 'column';
+  }catch(e){ console.warn('checkIncompleteMatches:', e); }
+}
+
+function _timeAgo(date){
+  const secs = Math.floor((Date.now() - date) / 1000);
+  if(secs < 60) return 'just now';
+  if(secs < 3600) return Math.floor(secs/60) + 'm ago';
+  if(secs < 86400) return Math.floor(secs/3600) + 'h ago';
+  return Math.floor(secs/86400) + 'd ago';
+}
+
+async function resumeMatch(m){
+  // Pre-fill form
+  document.getElementById('p1').value = m.p1;
+  document.getElementById('p2').value = m.p2;
+  document.getElementById('bestOf').value = m.bestOf;
+
+  // Restore score state
+  const s = m.scoreState || {};
+  score.p1.pts   = s.p1?.pts   || 0;
+  score.p1.games = s.p1?.games || 0;
+  score.p2.pts   = s.p2?.pts   || 0;
+  score.p2.games = s.p2?.games || 0;
+  score.game     = s.game      || 1;
+  score.bestOf   = m.bestOf;
+  gameHistory.length = 0;
+  (s.gameHistory || []).forEach(h => gameHistory.push(h));
+
+  _resumedFromId    = m.id;
+  _incompleteStartedAt = m.startedAt;
+
+  // Tick all consent boxes automatically for resume
+  ['consent1','consent2','consent3'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.checked = true;
+  });
+  updateConsentBtn();
+
+  // Render the restored score immediately so the host sees it
+  render();
+  renderHistory();
+
+  document.getElementById('resumeCard').style.display = 'none';
+}
+
+function toggleResumeCard(){
+  const body = document.getElementById('resumeBody');
+  const chevron = document.getElementById('resumeChevron');
+  const open = body.style.display === 'flex';
+  body.style.display = open ? 'none' : 'flex';
+  body.style.flexDirection = 'column';
+  chevron.style.transform = open ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+function dismissResume(){
+  document.getElementById('resumeCard').style.display = 'none';
+}
+function broadcast(){
+  dataConns.forEach(c=>{ try{ if(c.open) c.send({type:'update', score:{...score,p1name,p2name,gameHistory}}); }catch(e){} });
+  // Push score to API immediately (debounced 500ms to avoid flooding on rapid +/- taps)
+  clearTimeout(_scorePushTimer);
+  _scorePushTimer = setTimeout(()=>{
+    if(!roomId) return;
+    fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:roomId,p1:p1name,p2:p2name,bestOf:score.bestOf,
+        score:{p1games:score.p1.games,p2games:score.p2.games,p1pts:score.p1.pts,p2pts:score.p2.pts,game:score.game}
+      })}).catch(()=>{});
+  }, 500);
+  // Save incomplete match state (debounced 2s — survives device failure)
+  clearTimeout(_incompleteSaveTimer);
+  _incompleteSaveTimer = setTimeout(saveIncompleteMatch, 2000);
+}
+
+function adj(player, delta){
+  const k = player===1?'p1':'p2';
+  score[k].pts = Math.max(0, score[k].pts+delta);
+  if(delta === 1) currentPointLog.push({scorer: k});
+  render(); broadcast();
+}
+
+function gameWon(player){
+  const k = player===1?'p1':'p2';
+  // Save finished game + its point log before resetting
+  gameHistory.push({game: score.game, p1pts: score.p1.pts, p2pts: score.p2.pts, winner: player});
+  pointLogs.push([...currentPointLog]);
+  currentPointLog = [];
+  score[k].games++;
+  score.p1.pts=0; score.p2.pts=0; score.game++;
+  document.getElementById('undoGameBtn').disabled = false;
+  document.getElementById('undoGameBtn').style.opacity = '1';
+  renderHistory();
+  render(); broadcast();
+  // Ask host before showing stats/audio
+  showIntermissionPrompt(player, score.game - 1); // game-1 = the game just won
+  // Check if match is over
+  const needed = Math.ceil(score.bestOf / 2);
+  if(score.p1.games >= needed || score.p2.games >= needed){
+    handleMatchComplete(score.p1.games >= needed ? 1 : 2);
+  }
+}
+
+function undoGameWon(){
+  if(!gameHistory.length) return;
+  const last = gameHistory.pop();
+  currentPointLog = pointLogs.pop() || [];
+  const k = last.winner===1?'p1':'p2';
+  score[k].games--;
+  score.p1.pts = last.p1pts;
+  score.p2.pts = last.p2pts;
+  score.game = last.game;
+  if(!gameHistory.length){
+    document.getElementById('undoGameBtn').disabled = true;
+    document.getElementById('undoGameBtn').style.opacity = '0.45';
+  }
+  renderHistory();
+  render(); broadcast();
+}
+
+// ─── GAME WON OVERLAY ────────────────────────────────────────────────────────
+
+function buildPointSequence(log){
+  let p1=0, p2=0;
+  return log.map(pt => { if(pt.scorer==='p1') p1++; else p2++; return `${p1}–${p2}`; });
+}
+
+function showIntermissionPrompt(winner, gameNum){
+  const existing = document.getElementById('intermissionPrompt');
+  if(existing) existing.remove();
+
+  const winnerName = winner===1 ? p1name : p2name;
+  const col = winner===1 ? '#ff4d00' : '#00c8ff';
+
+  const modal = document.createElement('div');
+  modal.id = 'intermissionPrompt';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(7,9,12,0.85);display:flex;align-items:center;justify-content:center;padding:1.5rem;backdrop-filter:blur(4px)';
+  modal.innerHTML = `
+    <div style="background:#0f1318;border:1px solid rgba(255,255,255,0.1);border-radius:14px;
+      padding:2rem 2.5rem;max-width:360px;width:100%;display:flex;flex-direction:column;
+      align-items:center;gap:1.25rem;text-align:center">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.1em;color:${col}">
+        ${winnerName.toUpperCase()} WON GAME ${gameNum}
+      </div>
+      <div style="font-family:'Outfit',sans-serif;font-size:0.95rem;color:#aaa">
+        Go to intermission break?
+      </div>
+      <div style="display:flex;gap:0.75rem;width:100%">
+        <button onclick="startIntermission(${winner},${gameNum})"
+          style="flex:1;padding:0.75rem;background:#00e676;color:#000;border:none;border-radius:8px;
+          font-family:'Outfit',sans-serif;font-weight:800;font-size:0.95rem;cursor:pointer">
+          Yes
+        </button>
+        <button onclick="document.getElementById('intermissionPrompt').remove()"
+          style="flex:1;padding:0.75rem;background:rgba(255,255,255,0.06);color:#aaa;
+          border:1px solid rgba(255,255,255,0.1);border-radius:8px;
+          font-family:'Outfit',sans-serif;font-weight:600;font-size:0.95rem;cursor:pointer">
+          No
+        </button>
+      </div>
+    </div>`;
+
+  (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(modal);
+}
+
+function startIntermission(winner, gameNum){
+  document.getElementById('intermissionPrompt')?.remove();
+  showGameWonOverlay(winner, gameNum);
+}
+
+function showGameWonOverlay(winner, gameNum){
+  // Play sound — keep reference so we can stop it on Players Ready
+  if(gameSoundUrl){
+    try{
+      _gameWonAudio = new Audio(gameSoundUrl);
+      _gameWonAudio.volume = 0.9;
+      _gameWonAudio.play().catch(()=>{});
+    }catch(e){ _gameWonAudio = null; }
+  }
+
+  // Broadcast to viewers
+  const msg = {
+    type: 'game_won',
+    winner, gameNum,
+    p1name, p2name,
+    gameHistory: [...gameHistory],
+    pointLogs: [...pointLogs],
+    audioUrl: gameSoundUrl || null,
+    score: {...score}
+  };
+  dataConns.forEach(c=>{ try{ if(c.open) c.send(msg); }catch(e){} });
+
+  document.getElementById('gameWonOverlay')?.remove();
+
+  const winnerName = winner===1 ? p1name : p2name;
+  const col = winner===1 ? '#ff4d00' : '#00c8ff';
+
+  const ov = document.createElement('div');
+  ov.id = 'gameWonOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(7,9,12,0.93);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem;overflow-y:auto;backdrop-filter:blur(4px)';
+  ov.innerHTML = `
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:clamp(1.6rem,4vw,2.4rem);letter-spacing:0.12em;color:${col};text-align:center">
+      🏆 ${winnerName.toUpperCase()} WON GAME ${gameNum}
+    </div>
+    <div style="font-family:'Outfit',sans-serif;font-size:0.95rem;color:#6b7280;letter-spacing:0.08em;text-align:center">
+      <span style="color:#ff4d00;font-weight:700">${p1name.toUpperCase()}</span>
+      &nbsp;vs&nbsp;
+      <span style="color:#00c8ff;font-weight:700">${p2name.toUpperCase()}</span>
+    </div>
+    ${renderGameStatsTable()}
+    <div style="margin-top:0.5rem">
+      <button onclick="playersReady()"
+        style="padding:0.75rem 2.5rem;background:#00e676;color:#000;border:none;border-radius:8px;
+        font-family:'Outfit',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;letter-spacing:0.04em">
+        ✓ Players Ready
+      </button>
+    </div>`;
+
+  (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(ov);
+}
+
+function renderGameStatsTable(){
+  const cols = [];
+  for(let i=0; i<5; i++){
+    const gh = gameHistory[i];
+    const log = pointLogs[i] || [];
+    const seq = buildPointSequence(log);
+    const isCurrent = !!gh;
+    const winnerCol = gh ? (gh.winner===1?'#ff4d00':'#00c8ff') : 'transparent';
+
+    cols.push(`
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:0;flex:1">
+        <div style="font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.14em;
+          color:${isCurrent?'#e0e0e0':'#333'};margin-bottom:0.5rem;white-space:nowrap">GAME ${i+1}</div>
+        <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:0.1rem;
+          min-height:80px;max-height:45vh;overflow-y:auto">
+          ${seq.map((s,idx)=>`
+            <div style="font-family:'Space Mono',monospace;font-size:0.72rem;
+              color:${idx===seq.length-1?winnerCol:'#8888aa'};
+              font-weight:${idx===seq.length-1?'700':'400'};
+              padding:0.05rem 0;line-height:1.4;white-space:nowrap">${s}</div>`).join('')}
+          ${!isCurrent?`<div style="color:#333;font-size:0.65rem;font-family:'Space Mono',monospace">—</div>`:''}
+        </div>
+      </div>`);
+  }
+  return `
+    <div style="display:flex;gap:clamp(0.5rem,2vw,1.5rem);width:100%;max-width:600px;
+      padding:1rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+      border-radius:10px;justify-content:space-between">
+      ${cols.join('<div style="width:1px;background:rgba(255,255,255,0.07);flex-shrink:0"></div>')}
+    </div>`;
+}
+
+function playersReady(){
+  // Stop audio on host
+  if(_gameWonAudio){ try{ _gameWonAudio.pause(); _gameWonAudio.currentTime=0; }catch(e){} _gameWonAudio=null; }
+  document.getElementById('gameWonOverlay')?.remove();
+  // Tell viewers to stop audio and close overlay
+  dataConns.forEach(c=>{ try{ if(c.open) c.send({type:'game_ready'}); }catch(e){} });
+}
+
+// Load game sound URL at stream start
+async function loadGameSound(){
+  try{
+    const r = await fetch('/api/media?type=game-sound', {cache:'no-store'});
+    if(r.ok){ const d=await r.json(); gameSoundUrl = d.file_url || null; }
+  }catch(e){}
+}
+
+function handleMatchComplete(winner){
+  // Cancel any pending debounced score push — if it fires after the completion
+  // POST it would re-add the room to the live map, undoing the archival.
+  clearTimeout(_scorePushTimer);
+  clearTimeout(_incompleteSaveTimer);
+
+  // Remove from incomplete matches — this is now a proper completed match
+  if(roomId) deleteIncompleteMatch(roomId);
+
+  const winnerName = winner===1 ? p1name : p2name;
+  const summary = {
+    p1: p1name, p2: p2name, bestOf: score.bestOf,
+    p1games: score.p1.games, p2games: score.p2.games,
+    winner, winnerName, gameHistory: [...gameHistory],
+    maxViewers: _maxViewers,
+    totalViewerJoins: _totalViewerJoins
+  };
+
+  fetch('/api/rooms', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id:roomId, p1:p1name, p2:p2name, bestOf:score.bestOf,
+      score:{p1games:score.p1.games,p2games:score.p2.games,p1pts:score.p1.pts,p2pts:score.p2.pts,game:score.game},
+      completed: true, summary})
+  }).then(r=>r.json()).then(d=>{
+    if(d.warning) console.warn('handleMatchComplete:', d.warning);
+    else console.log('Match archived to Supabase:', d);
+  }).catch(e=>console.error('handleMatchComplete fetch failed:', e));
+}
+
+function resetPts(){
+  score.p1.pts=0; score.p2.pts=0;
+  render(); broadcast();
+}
+
+function renderHistory(){
+  if(!gameHistory.length) return;
+  document.getElementById('gameHistory').style.display = 'flex';
+  document.getElementById('gameHistoryRows').innerHTML = gameHistory.map(h=>{
+    const p1win = h.winner===1;
+    return `<div class="game-history-row">
+      <span class="gh-game">GAME ${h.game}</span>
+      <span class="gh-score"><span class="gh-p1">${h.p1pts}</span> – <span class="gh-p2">${h.p2pts}</span></span>
+      <span class="gh-winner">${p1win ? p1name.toUpperCase()+' wins' : p2name.toUpperCase()+' wins'}</span>
+    </div>`;
+  }).join('');
+}
+
+function render(){
+  document.getElementById('p1Pts').textContent = score.p1.pts;
+  document.getElementById('p2Pts').textContent = score.p2.pts;
+  const p1g = score.p1.games; const p2g = score.p2.games;
+  document.getElementById('p1Games').textContent = p1g + (p1g===1?' game':' games');
+  document.getElementById('p2Games').textContent = p2g + (p2g===1?' game':' games');
+}
+
+function confirmUndo(){
+  if(confirm('Undo the last game win? This will restore the previous score.')) undoGameWon();
+}
+
+function confirmReset(){
+  if(confirm('Reset points to 0–0? This cannot be undone.')) resetPts();
+}
+
+function confirmEnd(){
+  if(confirm('End your live stream?')) endBroadcast();
+}
+
+async function endBroadcast(){
+  clearInterval(banPollInterval);
+  clearInterval(heartbeatInterval);
+
+  // Save viewer stats even if match didn't formally complete
+  // so stats are never lost regardless of how the stream ends
+  if(roomId && _maxViewers >= 0){
+    fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: roomId, p1: p1name, p2: p2name, bestOf: score.bestOf,
+        score: { p1games: score.p1.games, p2games: score.p2.games,
+                 p1pts: score.p1.pts, p2pts: score.p2.pts, game: score.game },
+        completed: true,
+        summary: {
+          p1: p1name, p2: p2name, bestOf: score.bestOf,
+          p1games: score.p1.games, p2games: score.p2.games,
+          winner: null, winnerName: null,
+          gameHistory: [...gameHistory],
+          maxViewers: _maxViewers,
+          totalViewerJoins: _totalViewerJoins,
+          incomplete: true  // flag so dashboard can style it differently
+        }
+      })
+    }).catch(()=>{});
+  }
+
+  stopRollingBuffer();
+  endReplay(); // sync — no await needed
+  if(localStream) localStream.getTracks().forEach(t=>t.stop());
+  if(peer) peer.destroy();
+  if(roomId){
+    // sendBeacon guarantees delivery even during page navigation
+    navigator.sendBeacon('/api/rooms?id='+encodeURIComponent(roomId), null) ||
+      fetch('/api/rooms?id='+encodeURIComponent(roomId),{method:'DELETE'}).catch(()=>{});
+  }
+  location.href='index.html';
+}
+
+// ─── RECORDING ────────────────────────────────────────────────────────────────
+let mediaRecorder = null, recChunks = [], recTimerInterval = null, recSeconds = 0, recIndex = 0;
+let _recAnimFrame = null;
+
+function toggleRecord(){
+  if(!localStream){ alert('Start your stream first.'); return; }
+  if(mediaRecorder && mediaRecorder.state === 'recording'){
+    stopRecord();
+  } else {
+    startRecord();
+  }
+}
+
+function startRecord(){
+  recChunks = [];
+  const mimeType = getSupportedMime();
+
+  const localVid = document.getElementById('localVideo');
+  const captureFn = localVid && (HTMLCanvasElement.prototype.captureStream || HTMLCanvasElement.prototype.mozCaptureStream);
+  let recordStream = localStream;
+
+  if(captureFn && localVid){
+    const w = localVid.videoWidth  || 1280;
+    const h = localVid.videoHeight || 720;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+
+    function drawFrame(){
+      if(localVid.readyState >= 2){
+        ctx.drawImage(localVid, 0, 0, w, h);
+        // score bar
+        const bh = Math.round(h * 0.08);
+        const y  = h - bh;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, y, w, bh);
+        const p1n = (p1name || '').toUpperCase();
+        const p2n = (p2name || '').toUpperCase();
+        const p1p = String(score.p1.pts);
+        const p2p = String(score.p2.pts);
+        const p1g = (score.p1.games > 0) ? `(${score.p1.games})` : '';
+        const p2g = (score.p2.games > 0) ? `(${score.p2.games})` : '';
+        const fs  = Math.round(bh * 0.36);
+        const pad = Math.round(w * 0.02);
+        const mid = w / 2;
+        const cy  = y + bh * 0.5;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.font = `700 ${fs}px sans-serif`; ctx.fillStyle = '#ff4d00';
+        ctx.fillText(p1n, pad, cy - bh * 0.12);
+        if(p1g){ ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`; ctx.fillStyle = '#aaa'; ctx.fillText(p1g, pad, cy + bh * 0.3); }
+        ctx.textAlign = 'right';
+        ctx.font = `700 ${fs}px sans-serif`; ctx.fillStyle = '#00c8ff';
+        ctx.fillText(p2n, w - pad, cy - bh * 0.12);
+        if(p2g){ ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`; ctx.fillStyle = '#aaa'; ctx.fillText(p2g, w - pad, cy + bh * 0.3); }
+        ctx.textAlign = 'center';
+        ctx.font = `700 ${Math.round(fs*1.25)}px monospace`; ctx.fillStyle = '#fff';
+        ctx.fillText(`${p1p}  –  ${p2p}`, mid, cy);
+      }
+      _recAnimFrame = requestAnimationFrame(drawFrame);
+    }
+
+    const canvasStream = captureFn.call(canvas, 25);
+    const combined = new MediaStream();
+    canvasStream.getVideoTracks().forEach(t => combined.addTrack(t));
+    localStream.getAudioTracks().forEach(t => combined.addTrack(t));
+    recordStream = combined;
+    _recAnimFrame = requestAnimationFrame(drawFrame);
+  }
+
+  try {
+    mediaRecorder = new MediaRecorder(recordStream, mimeType ? {mimeType} : {});
+  } catch(e){
+    alert('Recording not supported on this browser: ' + e.message);
+    cancelAnimationFrame(_recAnimFrame);
+    return;
+  }
+  mediaRecorder.ondataavailable = e => { if(e.data && e.data.size > 0) recChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    cancelAnimationFrame(_recAnimFrame);
+    _recAnimFrame = null;
+    saveRecording(mimeType);
+  };
+  mediaRecorder.start(1000);
+
+  // UI
+  const btn = document.getElementById('recBtn');
+  btn.classList.add('recording');
+  document.getElementById('recBtnLabel').textContent = 'Stop';
+  document.getElementById('recTimer').style.display = 'inline';
+  recSeconds = 0;
+  updateRecTimer();
+  recTimerInterval = setInterval(()=>{ recSeconds++; updateRecTimer(); }, 1000);
+}
+
+function stopRecord(){
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  clearInterval(recTimerInterval);
+  const btn = document.getElementById('recBtn');
+  btn.classList.remove('recording');
+  document.getElementById('recBtnLabel').textContent = 'Record';
+  document.getElementById('recTimer').style.display = 'none';
+}
+
+async function saveRecording(mimeType){
+  const ext = mimeType && mimeType.includes('mp4') ? 'mp4' : 'webm';
+  let blob = new Blob(recChunks, {type: mimeType || 'video/webm'});
+  blob = await fixRecordingDuration(blob, recSeconds * 1000);
+  const url = URL.createObjectURL(blob);
+  recIndex++;
+  const dur = formatTime(recSeconds);
+  const name = `squashlive-host-${recIndex}-${dur.replace(':','-')}.${ext}`;
+
+  // Auto-download
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 5000);
+
+  // Show YouTube upload prompt
+  showYouTubePrompt(name);
+}
+
+function showYouTubePrompt(filename){
+  document.getElementById('ytPromptFilename').textContent = filename;
+  document.getElementById('ytPrompt').style.display = 'flex';
+}
+
+async function submitHighlight(){
+  const url = document.getElementById('ytUrlInput').value.trim();
+  const title = document.getElementById('ytTitleInput').value.trim();
+  if(!url){ document.getElementById('ytPromptStatus').textContent = 'Please paste a YouTube URL.'; return; }
+  if(!title){ document.getElementById('ytPromptStatus').textContent = 'Please add a title.'; return; }
+
+  const btn = document.getElementById('ytSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  const { data: { session } } = await sb.auth.getSession();
+  const email = session?.user?.email || '';
+  const matchDesc = p1name && p2name ? `${p1name} vs ${p2name}` : '';
+
+  try {
+    const r = await fetch('/api/highlights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtube_url: url, title, match_desc: matchDesc, broadcaster_email: email })
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Submission failed');
+    document.getElementById('ytPromptStatus').style.color = 'var(--accent2)';
+    document.getElementById('ytPromptStatus').textContent = '✓ Submitted for review! We will approve it shortly.';
+    document.getElementById('ytSubmitBtn').style.display = 'none';
+    setTimeout(()=>{ document.getElementById('ytPrompt').style.display = 'none'; }, 3000);
+  } catch(e) {
+    document.getElementById('ytPromptStatus').style.color = 'var(--error)';
+    document.getElementById('ytPromptStatus').textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Submit Highlight';
+  }
+}
+
+// ─── ROLLING 20-SECOND REPLAY BUFFER ────────────────────────────────────────
+// Records in up to 20-second cycles with a 200ms timeslice (frequent keyframes).
+// Each cycle starts fresh so timestamps are always 0-based — no empty timeline,
+// no seeking needed. Stopping the recorder flushes all buffered encoder data so
+// the replay always includes the most recent frames.
+let _rollRecorder    = null;
+let _rollChunks      = [];     // current cycle chunks
+let _rollPrevBlob    = null;   // last completed cycle blob (fallback)
+let _rollMime        = '';
+let _rollActive      = false;
+let _rollObjectUrl   = null;
+let _rollCycleTimer  = null;
+let _rollPendingCb   = null;   // called from onstop when replay is triggered mid-cycle
+const ROLL_SECS      = 20;
+const ROLL_SLICE     = 200;    // ms timeslice → keyframe every ~200ms
+
+function startRollingBuffer(){
+  if(!localStream) return;
+  _rollMime   = getSupportedMime();
+  _rollActive = true;
+  _startCycle();
+  document.getElementById('replayBtn').style.display = 'flex';
+  console.log('Replay buffer started (', ROLL_SECS+'s cycles,', ROLL_SLICE+'ms slice)');
+}
+
+function _startCycle(){
+  if(!_rollActive || !localStream?.active) return;
+  _rollChunks = [];
+  clearTimeout(_rollCycleTimer);
+
+  try{
+    _rollRecorder = new MediaRecorder(localStream, _rollMime ? {mimeType: _rollMime} : {});
+  }catch(e){ console.warn('Replay recorder error:', e); return; }
+
+  _rollRecorder.ondataavailable = e => {
+    if(e.data?.size > 0) _rollChunks.push(e.data);
+  };
+
+  _rollRecorder.onstop = () => {
+    const mime = (_rollMime || 'video/webm').split(';')[0];
+    if(_rollChunks.length > 0){
+      _rollPrevBlob = new Blob(_rollChunks, {type: mime});
+      console.log('Cycle saved:', (_rollPrevBlob.size/1024).toFixed(0)+'KB,', _rollChunks.length, 'chunks');
+    }
+    if(_rollPendingCb){
+      const cb = _rollPendingCb;
+      _rollPendingCb = null;
+      cb();         // show replay using the just-flushed data
+    } else if(_rollActive){
+      _startCycle(); // normal cycle end — start next one
+    }
+  };
+
+  _rollRecorder.start(ROLL_SLICE);
+  // Auto-restart cycle after ROLL_SECS
+  _rollCycleTimer = setTimeout(()=>{
+    if(_rollRecorder?.state === 'recording') _rollRecorder.stop();
+  }, ROLL_SECS * 1000);
+}
+
+function stopRollingBuffer(hideBtn = true){
+  _rollActive = false;
+  clearTimeout(_rollCycleTimer);
+  _rollPendingCb = null;
+  if(_rollRecorder?.state !== 'inactive') _rollRecorder?.stop();
+  _rollRecorder = null;
+  _rollChunks   = [];
+  if(hideBtn) document.getElementById('replayBtn').style.display = 'none';
+}
+
+function triggerReplay(){
+  if(!_rollRecorder && !_rollPrevBlob){
+    alert('Buffer not ready — wait a moment after going live.'); return;
+  }
+
+  // Stop current cycle to flush all buffered encoder data, then show replay in onstop
+  if(_rollRecorder?.state === 'recording'){
+    clearTimeout(_rollCycleTimer);
+    _rollPendingCb = _doShowReplay;
+    _rollRecorder.stop();
+  } else {
+    _doShowReplay();
+  }
+}
+
+function _doShowReplay(){
+  const mime = (_rollMime || 'video/webm').split(';')[0];
+
+  // Combine previous completed cycle + current chunks for maximum footage
+  const parts = [];
+  if(_rollPrevBlob) parts.push(_rollPrevBlob);
+  if(_rollChunks.length > 0) parts.push(new Blob(_rollChunks, {type: mime}));
+  if(parts.length === 0){ alert('Not enough data yet — try again in a moment.'); _startCycle(); return; }
+
+  const blob = new Blob(parts, {type: mime});
+  console.log('Replay blob:', (blob.size/1024).toFixed(0)+'KB, mime:', mime);
+
+  // Restart recording immediately so buffer keeps filling
+  _startCycle();
+
+  if(_rollObjectUrl) URL.revokeObjectURL(_rollObjectUrl);
+  _rollObjectUrl = URL.createObjectURL(blob);
+
+  // Host sees their own replay locally — live feed continues for viewers unaffected
+  showReplayOverlay(_rollObjectUrl, mime, blob);
+}
+
+function broadcastToAll(msg){
+  dataConns.forEach(c=>{ try{ if(c.open) c.send(msg); }catch(e){} });
+}
+
+let _savedReplayBlob = null;
+
+// Replay overlay — shows local blob, full controls, live feed continues underneath
+let _hostReplayScore = null; // score snapshot at time replay was triggered
+
+function showReplayOverlay(url, mime, blob){
+  _savedReplayBlob = blob;
+  // Snapshot score now so save uses the correct score
+  _hostReplayScore = {
+    p1name: p1name, p2name: p2name,
+    p1: { pts: score.p1.pts, games: score.p1.games },
+    p2: { pts: score.p2.pts, games: score.p2.games }
+  };
+
+  const existing = document.getElementById('replayOverlay');
+  if(existing) existing.remove();
+
+  const ov = document.createElement('div');
+  ov.id = 'replayOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:500;background:rgba(7,9,12,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.85rem;padding:1.5rem;overflow-y:auto;';
+
+  const _sc = _hostReplayScore;
+  const _p1g = _sc.p1.games > 0 ? ` (${_sc.p1.games})` : '';
+  const _p2g = _sc.p2.games > 0 ? ` (${_sc.p2.games})` : '';
+
+  ov.innerHTML = `
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.1em;color:#00c8ff;">⏪ INSTANT REPLAY</div>
+    <div style="position:relative;max-width:min(640px,90vw);width:100%;">
+      <video id="replayVid" style="width:100%;border-radius:10px;background:#000;outline:none;display:block;" controls playsinline muted>
+        <source src="${url}" type="${mime}">
+      </video>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:0.35rem 0.75rem;
+        background:rgba(0,0,0,0.72);border-radius:0 0 10px 10px;
+        display:flex;align-items:center;justify-content:space-between;
+        font-family:'Outfit',sans-serif;font-size:0.82rem;pointer-events:none;">
+        <span style="color:#ff4d00;font-weight:700;">${_sc.p1name.toUpperCase()}${_p1g}</span>
+        <span style="color:#fff;font-weight:700;font-family:'Space Mono',monospace;font-size:1rem;">${_sc.p1.pts} – ${_sc.p2.pts}</span>
+        <span style="color:#00c8ff;font-weight:700;">${_sc.p2name.toUpperCase()}${_p2g}</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;justify-content:center;">
+      <span style="font-family:'Space Mono',monospace;font-size:0.65rem;color:#6b7280;letter-spacing:0.06em;">SPEED</span>
+      ${[1, 0.75, 0.5, 0.25].map(s=>`
+        <button onclick="setReplaySpeed(${s})" id="speedBtn${s.toString().replace('.','_')}" style="
+          padding:0.35rem 0.7rem;border-radius:5px;border:1px solid rgba(255,255,255,0.12);
+          background:${s===1?'rgba(0,200,255,0.2)':'transparent'};
+          color:${s===1?'#00c8ff':'#6b7280'};font-family:'Space Mono',monospace;
+          font-size:0.65rem;cursor:pointer;transition:all 0.15s;">${s===1?'1×':s+'×'}</button>
+      `).join('')}
+    </div>
+    <div style="display:flex;gap:0.65rem;flex-wrap:wrap;justify-content:center;">
+      <button onclick="saveReplay()" style="
+        padding:0.5rem 1.1rem;background:rgba(0,200,255,0.12);color:#00c8ff;
+        border:1px solid rgba(0,200,255,0.35);border-radius:7px;
+        font-family:'Outfit',sans-serif;font-weight:600;font-size:0.83rem;cursor:pointer;">
+        ⬇ Save Replay
+      </button>
+      <button onclick="closeReplayOverlay()" style="
+        padding:0.5rem 1.1rem;background:var(--accent);color:#fff;border:none;
+        border-radius:7px;font-family:'Outfit',sans-serif;font-weight:700;
+        font-size:0.83rem;cursor:pointer;">
+        ✕ Back to Live
+      </button>
+    </div>
+  `;
+  document.body.appendChild(ov);
+
+  const vid = document.getElementById('replayVid');
+  vid.load();
+  vid.play().catch(()=>{});
+  // Blur local preview so host focuses on replay (live stream still transmits)
+  const lv = document.getElementById('localVideo');
+  if(lv) lv.style.filter = 'blur(4px) brightness(0.4)';
+}
+
+function setReplaySpeed(speed){
+  const vid = document.getElementById('replayVid');
+  if(!vid) return;
+  vid.playbackRate = speed;
+  [1, 0.75, 0.5, 0.25].forEach(s=>{
+    const btn = document.getElementById('speedBtn'+s.toString().replace('.','_'));
+    if(!btn) return;
+    btn.style.background  = s===speed ? 'rgba(0,200,255,0.2)' : 'transparent';
+    btn.style.color       = s===speed ? '#00c8ff' : '#6b7280';
+    btn.style.borderColor = s===speed ? 'rgba(0,200,255,0.4)' : 'rgba(255,255,255,0.12)';
+  });
+}
+
+function saveReplay(){
+  const blob = _savedReplayBlob;
+  if(!blob) return;
+
+  const mimeType = _rollMime ? _rollMime.split(';')[0] :
+    (MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' :
+     MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '');
+  const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm';
+  const name = `replay-${roomId}-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.${ext}`;
+
+  const saveBtn = document.querySelector('#replayOverlay button[onclick="saveReplay()"]');
+  if(saveBtn){ saveBtn.textContent = '⏳ Saving…'; saveBtn.disabled = true; }
+
+  const tempVid = document.createElement('video');
+  tempVid.src = URL.createObjectURL(blob);
+  tempVid.muted = true;
+  tempVid.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;';
+  document.body.appendChild(tempVid);
+
+  const captureOk = typeof HTMLCanvasElement.prototype.captureStream === 'function' ||
+                    typeof HTMLCanvasElement.prototype.mozCaptureStream === 'function';
+
+  const finish = (outBlob)=>{
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(outBlob);
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(a.href);
+      URL.revokeObjectURL(tempVid.src); tempVid.remove(); }, 5000);
+    if(saveBtn){ saveBtn.textContent = '⬇ Save Replay'; saveBtn.disabled = false; }
+  };
+
+  tempVid.onloadedmetadata = ()=>{
+    if(!captureOk){
+      // iOS Safari — no canvas capture, save raw blob
+      URL.revokeObjectURL(tempVid.src); tempVid.remove();
+      finish(blob); return;
+    }
+
+    const w = tempVid.videoWidth || 1280;
+    const h = tempVid.videoHeight || 720;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+
+    const _sc = _hostReplayScore || {};
+    function drawScoreBar(){
+      const bh = Math.round(h * 0.08);
+      const y  = h - bh;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(0, y, w, bh);
+      const p1n = (_sc.p1name || '').toUpperCase();
+      const p2n = (_sc.p2name || '').toUpperCase();
+      const p1p = String(_sc.p1?.pts ?? 0);
+      const p2p = String(_sc.p2?.pts ?? 0);
+      const p1g = (_sc.p1?.games > 0) ? `(${_sc.p1.games})` : '';
+      const p2g = (_sc.p2?.games > 0) ? `(${_sc.p2.games})` : '';
+      const fs  = Math.round(bh * 0.36);
+      const pad = Math.round(w * 0.02);
+      const mid = w / 2;
+      const cy  = y + bh * 0.5;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.font = `700 ${fs}px sans-serif`; ctx.fillStyle = '#ff4d00';
+      ctx.fillText(p1n, pad, cy - bh * 0.12);
+      if(p1g){ ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`; ctx.fillStyle = '#aaa'; ctx.fillText(p1g, pad, cy + bh * 0.3); }
+      ctx.textAlign = 'right';
+      ctx.font = `700 ${fs}px sans-serif`; ctx.fillStyle = '#00c8ff';
+      ctx.fillText(p2n, w - pad, cy - bh * 0.12);
+      if(p2g){ ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`; ctx.fillStyle = '#aaa'; ctx.fillText(p2g, w - pad, cy + bh * 0.3); }
+      ctx.textAlign = 'center';
+      ctx.font = `700 ${Math.round(fs*1.25)}px monospace`; ctx.fillStyle = '#fff';
+      ctx.fillText(`${p1p}  –  ${p2p}`, mid, cy);
+    }
+
+    const captureFn = (canvas.captureStream || canvas.mozCaptureStream).bind(canvas);
+    const canvasStream = captureFn(25);
+    const combined = new MediaStream();
+    canvasStream.getVideoTracks().forEach(t => combined.addTrack(t));
+    // No audio — replays are silent
+
+    let rec, chunks = [];
+    try{ rec = new MediaRecorder(combined, mimeType ? {mimeType} : {}); }
+    catch(e){ rec = new MediaRecorder(combined); }
+    rec.ondataavailable = e => { if(e.data?.size > 0) chunks.push(e.data); };
+    rec.onstop = async ()=>{
+      cancelAnimationFrame(_sf);
+      let outBlob = new Blob(chunks, {type: mimeType || 'video/webm'});
+      if(_vidDuration > 0) outBlob = await fixRecordingDuration(outBlob, _vidDuration * 1000);
+      finish(outBlob);
+    };
+
+    let _sf, _started = false, _vidDuration = 0;
+    function drawLoop(){
+      if(_started && tempVid.ended){ _vidDuration = tempVid.currentTime; rec.stop(); return; }
+      if(tempVid.readyState >= 2){ ctx.drawImage(tempVid, 0, 0, w, h); drawScoreBar(); _started = true; }
+      _sf = requestAnimationFrame(drawLoop);
+    }
+
+    rec.start(1000);
+    tempVid.play().then(drawLoop).catch(e=>{
+      cancelAnimationFrame(_sf);
+      alert('Save failed: '+e.message);
+      if(saveBtn){ saveBtn.textContent='⬇ Save Replay'; saveBtn.disabled=false; }
+    });
+  };
+  tempVid.onerror = ()=>{
+    URL.revokeObjectURL(tempVid.src); tempVid.remove();
+    finish(blob); // fallback to raw blob
+  };
+  tempVid.load();
+}
+
+function closeReplayOverlay(){
+  const ov = document.getElementById('replayOverlay');
+  if(ov) ov.remove();
+  const lv = document.getElementById('localVideo');
+  if(lv) lv.style.filter = '';
+  if(_rollObjectUrl){ URL.revokeObjectURL(_rollObjectUrl); _rollObjectUrl = null; }
+}
+
+// Keep endReplay as alias for endBroadcast compatibility
+function endReplay(){ closeReplayOverlay(); }
+
+function getSupportedMime(){
+  const types = [
+    'video/mp4;codecs=avc1,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+
+// Fix MP4 duration fields (mvhd / tkhd / mdhd) so system players can seek.
+// Chrome MediaRecorder writes these boxes with duration=0; we walk the box tree and patch them.
+async function fixMp4Duration(blob, durationMs){
+  if(!durationMs || durationMs <= 0) return blob;
+  const buf = await blob.arrayBuffer();
+  const arr = new Uint8Array(buf);
+  const dv  = new DataView(buf);
+  let mvTs  = 1000; // movie timescale; updated when mvhd is found
+
+  function fcc(o){ return String.fromCharCode(arr[o],arr[o+1],arr[o+2],arr[o+3]); }
+  function walk(start, end){
+    let i = start;
+    while(i + 8 <= end){
+      const sz = dv.getUint32(i, false);
+      if(sz < 8) break;
+      const type = fcc(i + 4);
+      if(type === 'mvhd'){
+        const v = arr[i+8];
+        if(v === 0){ mvTs=dv.getUint32(i+20,false); dv.setUint32(i+24, Math.round(durationMs*mvTs/1000)>>>0, false); }
+        else       { mvTs=dv.getUint32(i+28,false); dv.setUint32(i+32,0,false); dv.setUint32(i+36, Math.round(durationMs*mvTs/1000)>>>0, false); }
+      } else if(type === 'tkhd'){
+        const v = arr[i+8]; const t = Math.round(durationMs*mvTs/1000)>>>0;
+        if(v === 0) dv.setUint32(i+28, t, false);
+        else { dv.setUint32(i+36,0,false); dv.setUint32(i+40,t,false); }
+      } else if(type === 'mdhd'){
+        const v = arr[i+8];
+        if(v === 0){ const ts=dv.getUint32(i+20,false); dv.setUint32(i+24, Math.round(durationMs*ts/1000)>>>0, false); }
+        else       { const ts=dv.getUint32(i+28,false); dv.setUint32(i+32,0,false); dv.setUint32(i+36, Math.round(durationMs*ts/1000)>>>0, false); }
+      }
+      if('moov trak mdia minf stbl edts'.includes(type)) walk(i+8, i+sz);
+      i += sz;
+    }
+  }
+  walk(0, arr.length);
+  return new Blob([buf], {type: blob.type});
+}
+
+// Unified helper — picks the right fixer based on blob MIME type.
+async function fixRecordingDuration(blob, durationMs){
+  if(!blob || !durationMs || durationMs <= 0) return blob;
+  if(blob.type.includes('mp4'))  return fixMp4Duration(blob, durationMs);
+  if(blob.type.includes('webm')) return fixWebmDuration(blob, durationMs);
+  return blob;
+}
+
+// Fix WebM duration so system players (not just browsers) show the correct seek bar.
+// Chrome MediaRecorder produces "live" WebM with no Duration element at all.
+// Step 1: patch it if present. Step 2: insert it into the Info segment if absent.
+async function fixWebmDuration(blob, durationMs){
+  if(!durationMs || durationMs <= 0) return blob;
+  const buf = await blob.arrayBuffer();
+  const arr = new Uint8Array(buf);
+
+  function readVint(pos){
+    const b = arr[pos];
+    if(b & 0x80) return {v: b & 0x7F,                                                len: 1};
+    if(b & 0x40) return {v: ((b&0x3F)<<8)|arr[pos+1],                                len: 2};
+    if(b & 0x20) return {v: ((b&0x1F)<<16)|(arr[pos+1]<<8)|arr[pos+2],               len: 3};
+    return       {v: ((b&0x0F)<<24)|(arr[pos+1]<<16)|(arr[pos+2]<<8)|arr[pos+3],     len: 4};
+  }
+  function encVint(v){
+    if(v < 127)     return new Uint8Array([0x80|v]);
+    if(v < 16383)   return new Uint8Array([0x40|(v>>8),   v&0xFF]);
+    if(v < 2097151) return new Uint8Array([0x20|(v>>16),  (v>>8)&0xFF,  v&0xFF]);
+    return                  new Uint8Array([0x10|(v>>>24), (v>>16)&0xFF, (v>>8)&0xFF, v&0xFF]);
+  }
+
+  // Step 1 — patch existing Duration element (EBML ID 0x4489)
+  for(let i = 0; i < arr.length - 10; i++){
+    if(arr[i] !== 0x44 || arr[i+1] !== 0x89) continue;
+    const dv = new DataView(buf);
+    if(arr[i+2] === 0x88){ dv.setFloat64(i+3, durationMs, false); return new Blob([buf],{type:blob.type}); }
+    if(arr[i+2] === 0x84){ dv.setFloat32(i+3, durationMs, false); return new Blob([buf],{type:blob.type}); }
+  }
+
+  // Step 2 — insert Duration into Info element (EBML ID 0x1549A966)
+  for(let i = 0; i < arr.length - 20; i++){
+    if(arr[i]!==0x15||arr[i+1]!==0x49||arr[i+2]!==0xA9||arr[i+3]!==0x66) continue;
+    const sz = readVint(i + 4);
+    if(sz.v <= 0) continue;
+    const newSzEnc = encVint(sz.v + 11);
+    if(newSzEnc.length !== sz.len) continue; // VINT width changed — skip
+
+    const insertAt = i + 4 + sz.len;
+    const durEl = new Uint8Array(11);
+    durEl[0]=0x44; durEl[1]=0x89; durEl[2]=0x88;
+    new DataView(durEl.buffer).setFloat64(3, durationMs, false);
+
+    const out = new Uint8Array(arr.length + 11);
+    out.set(arr.subarray(0, i + 4));
+    out.set(newSzEnc, i + 4);
+    out.set(durEl,    insertAt);
+    out.set(arr.subarray(insertAt), insertAt + 11);
+    return new Blob([out.buffer], {type: blob.type});
+  }
+
+  return blob;
+}
+
+function updateRecTimer(){
+  document.getElementById('recTimer').textContent = formatTime(recSeconds);
+}
+function formatTime(s){
+  const m = Math.floor(s/60);
+  return String(m).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+
+// ─── CAMERA FLIP ─────────────────────────────────────────────────────────────
+let currentFacingMode = 'environment'; // default to rear camera
+
+async function flipCamera(){
+  const btn = document.getElementById('flipBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+
+  const newFacing = currentFacingMode === 'user' ? 'environment' : 'user';
+
+  try {
+    // Stop the old video track FIRST — browser refuses getUserMedia if same device is still active
+    localStream.getVideoTracks().forEach(t=>{ localStream.removeTrack(t); t.stop(); });
+
+    // Try exact facingMode first, fall back to non-exact (exact throws on single-camera devices)
+    let newCamStream;
+    try {
+      newCamStream = await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints({ facingMode: { exact: newFacing } }), audio: false
+      });
+    } catch(e){
+      newCamStream = await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints({ facingMode: newFacing }), audio: false
+      });
+    }
+    const newVideoTrack = newCamStream.getVideoTracks()[0];
+    if(!newVideoTrack) throw new Error('No video track returned');
+
+    // Add new track to localStream and update preview
+    localStream.addTrack(newVideoTrack);
+    document.getElementById('localVideo').srcObject = null;
+    document.getElementById('localVideo').srcObject = localStream;
+
+    // replaceTrack in every active outgoing call (seamless for viewers, no renegotiation)
+    for(const call of activeCalls){
+      const pc = call.peerConnection;
+      if(!pc) continue;
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      if(sender) await sender.replaceTrack(newVideoTrack);
+    }
+
+    currentFacingMode = newFacing;
+
+    // Update button label so broadcaster knows which camera is active
+    const label = btn.querySelector('span') || btn;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/></svg> ${newFacing === 'environment' ? 'Front Cam' : 'Back Cam'}`;
+
+  } catch(e){
+    console.warn('flipCamera failed:', e.message);
+    alert('Could not switch camera. Your device may only have one camera, or the browser blocked access. ' + e.message);
+  }
+
+  btn.disabled = false;
+  btn.style.opacity = '';
+}
+
+function copyLink(){
+  const url = window._watchUrl;
+  if(!url) return;
+  navigator.clipboard.writeText(url).then(()=>{
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    setTimeout(()=>{ btn.textContent = 'Copy Link'; }, 2000);
+  }).catch(()=>{ prompt('Copy this link:', url); });
+}
+
+// ─── YOUTUBE HIGHLIGHT PROMPT ─────────────────────────────────────────────────
+// Injected into DOM on first use
+(function(){
+  const modal = document.createElement('div');
+  modal.id = 'ytPrompt';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9000;background:rgba(7,9,12,0.92);align-items:center;justify-content:center;padding:1.5rem;backdrop-filter:blur(8px)';
+  modal.innerHTML = `
+    <div style="max-width:420px;width:100%;background:#0f1318;border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden">
+      <div style="height:2px;background:linear-gradient(to right,transparent,#ff4d00,transparent)"></div>
+      <div style="padding:1.75rem;display:flex;flex-direction:column;gap:1rem">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:0.03em">
+          🎬 Submit a Highlight?
+        </div>
+        <div style="font-size:0.82rem;color:#c0c0c0;line-height:1.6">
+          Your clip <strong id="ytPromptFilename" style="color:#f0f0f0"></strong> has been saved.<br>
+          Upload it to YouTube, then paste the link below to submit it as a highlight for the community.
+        </div>
+        <a href="https://studio.youtube.com/channel/UC/videos/upload" target="_blank"
+          style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.7rem;
+          background:#ff0000;color:#fff;text-decoration:none;border-radius:7px;
+          font-family:'Outfit',sans-serif;font-weight:700;font-size:0.85rem">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3 3 0 0 0-2.12-2.12C19.54 3.5 12 3.5 12 3.5s-7.54 0-9.38.57A3 3 0 0 0 .5 6.19C0 8.03 0 12 0 12s0 3.97.5 5.81a3 3 0 0 0 2.12 2.12C4.46 20.5 12 20.5 12 20.5s7.54 0 9.38-.57a3 3 0 0 0 2.12-2.12C24 15.97 24 12 24 12s0-3.97-.5-5.81zM9.75 15.5v-7l6.5 3.5-6.5 3.5z"/></svg>
+          Upload to YouTube
+        </a>
+        <div style="display:flex;flex-direction:column;gap:0.5rem">
+          <input id="ytTitleInput" placeholder="Highlight title e.g. 'Smith stunning backhand rally'"
+            style="background:#161c24;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+            font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+            border-radius:7px;outline:none;width:100%"/>
+          <input id="ytUrlInput" placeholder="Paste YouTube link here"
+            style="background:#161c24;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+            font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+            border-radius:7px;outline:none;width:100%"/>
+        </div>
+        <div id="ytPromptStatus" style="font-size:0.78rem;color:#6b7280;min-height:1rem"></div>
+        <div style="display:flex;gap:0.65rem">
+          <button id="ytSubmitBtn" onclick="submitHighlight()"
+            style="flex:1;padding:0.75rem;background:#ff4d00;color:#fff;border:none;border-radius:7px;
+            font-family:'Outfit',sans-serif;font-weight:700;font-size:0.88rem;cursor:pointer">
+            Submit Highlight
+          </button>
+          <button onclick="document.getElementById('ytPrompt').style.display='none'"
+            style="padding:0.75rem 1rem;background:transparent;border:1px solid rgba(255,255,255,0.1);
+            color:#6b7280;border-radius:7px;font-family:'Outfit',sans-serif;font-size:0.85rem;cursor:pointer">
+            Skip
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+})();
+
+// ─── RING REMOTE ─────────────────────────────────────────────────────────────
+// Bluetooth remote: 1 click = P1 point, 2 clicks = P2 point, 3+ clicks = undo
+// Supports both keyboard-style remotes (keydown) and mouse-click remotes (click event)
+(function(){
+  let ringKey = localStorage.getItem('ringRemoteKey');
+  let clickCount = 0, clickTimer = null;
+  const WINDOW_MS = 600;
+  let configMode = false;
+
+  function undoLastPoint(){
+    if(!currentPointLog.length) return;
+    const last = currentPointLog.pop();
+    score[last.scorer].pts = Math.max(0, score[last.scorer].pts - 1);
+    render(); broadcast();
+    showStatus('↩ Undo');
+  }
+
+  function showStatus(text){
+    const el = document.getElementById('ringStatus');
+    if(!el) return;
+    el.textContent = text;
+    el.style.display = 'block';
+    el.style.color = '#f0f0f0';
+    clearTimeout(el._fadeTimer);
+    el._fadeTimer = setTimeout(()=>{ el.style.color = '#6b7280'; }, 700);
+  }
+
+  function handleClick(){
+    clickCount++;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(()=>{
+      const n = clickCount;
+      clickCount = 0;
+      if(n === 1){ adj(1, 1); showStatus('+ P1'); }
+      else if(n === 2){ adj(2, 1); showStatus('+ P2'); }
+      else { undoLastPoint(); }
+    }, WINDOW_MS);
+  }
+
+  function finishConfig(key, label){
+    ringKey = key;
+    localStorage.setItem('ringRemoteKey', key);
+    configMode = false;
+    const btn = document.getElementById('ringConfigBtn');
+    const status = document.getElementById('ringStatus');
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    btn.textContent = 'Bluetooth remote - reconfigure';
+    status.textContent = 'Configured (' + label + ')';
+    status.style.display = 'block';
+  }
+
+  function updateBtn(){
+    const btn = document.getElementById('ringConfigBtn');
+    if(!btn) return;
+    btn.textContent = ringKey
+      ? 'Bluetooth remote - reconfigure'
+      : 'Bluetooth remote - configure';
+  }
+
+  window.startRingConfig = function(){
+    configMode = true;
+    const btn = document.getElementById('ringConfigBtn');
+    const status = document.getElementById('ringStatus');
+    btn.textContent = 'Press your Bluetooth remote now...';
+    btn.style.borderColor = 'rgba(255,77,0,0.5)';
+    btn.style.color = '#ff4d00';
+    status.textContent = 'Waiting for button press…';
+    status.style.display = 'block';
+    status.style.color = '#6b7280';
+  };
+
+  // Keyboard-style remotes
+  document.addEventListener('keydown', e=>{
+    if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+    if(configMode){
+      finishConfig(e.key, e.key);
+      e.preventDefault();
+      return;
+    }
+    if(ringKey && ringKey !== '__click__' && e.key === ringKey){
+      e.preventDefault();
+      handleClick();
+    }
+  });
+
+  // Mouse-click-style remotes (e.g. Kmart Bluetooth ring — shows cursor and sends click events)
+  document.addEventListener('click', e=>{
+    // Never intercept clicks on the configure button itself
+    if(e.target.closest && e.target.closest('#ringConfigBtn')) return;
+
+    if(configMode){
+      finishConfig('__click__', 'mouse click');
+      e.preventDefault();
+      return;
+    }
+
+    if(ringKey === '__click__'){
+      // Don't double-count when clicking a score/game button directly
+      if(e.target.closest && e.target.closest('button, input, select, textarea, a')) return;
+      e.preventDefault();
+      handleClick();
+    }
+  });
+
+  updateBtn();
+})();
+
+window.addEventListener('beforeunload',()=>{
+  clearInterval(heartbeatInterval);
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  if(localStream) localStream.getTracks().forEach(t=>t.stop());
+  if(peer) peer.destroy();
+  if(roomId) fetch('/api/rooms?id='+encodeURIComponent(roomId),{method:'DELETE'}).catch(()=>{});
+});
+</script>
+</body>
+</html>

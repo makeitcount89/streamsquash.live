@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SquashLive — Host Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#07090c;--surface:#0f1318;--surface2:#161c24;
+    --accent:#ff4d00;--accent2:#00c8ff;--green:#00e676;
+    --text:#f0f0f0;--muted:#6b7280;--border:rgba(255,255,255,0.07);
+    --error:#ff4d6d;--success:#00e676;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;
+    min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;padding:1.5rem;
+  }
+  body::before{
+    content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity:0.4;
+  }
+  body::after{
+    content:'';position:fixed;pointer-events:none;z-index:0;
+    top:-20%;left:50%;transform:translateX(-50%);
+    width:600px;height:600px;
+    background:radial-gradient(ellipse,rgba(255,77,0,0.06) 0%,transparent 70%);
+  }
+
+  .card{
+    width:100%;max-width:400px;position:relative;z-index:1;
+    background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    overflow:hidden;
+  }
+  .card::before{
+    content:'';position:absolute;top:0;left:15%;right:15%;height:2px;
+    background:linear-gradient(to right,transparent,var(--accent),transparent);
+  }
+
+  /* Header */
+  .card-header{padding:2rem 2rem 1.5rem;border-bottom:1px solid var(--border)}
+  .back-link{
+    display:inline-flex;align-items:center;gap:0.4rem;
+    font-size:0.75rem;color:var(--muted);text-decoration:none;
+    margin-bottom:1.5rem;transition:color 0.2s;
+  }
+  .back-link:hover{color:var(--text)}
+  .logo{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:0.05em}
+  .logo span{color:var(--accent)}
+  .card-title{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.03em;margin-top:1rem;margin-bottom:0.25rem}
+  .card-sub{font-size:0.85rem;color:var(--muted);line-height:1.5}
+
+  /* Steps */
+  .step{display:none;flex-direction:column;gap:1rem;padding:1.75rem 2rem 2rem}
+  .step.active{display:flex}
+
+  /* Fields */
+  .field{display:flex;flex-direction:column;gap:0.4rem}
+  .field label{font-size:0.72rem;font-weight:500;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase}
+  .field input{
+    background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    font-family:'Outfit',sans-serif;font-size:0.95rem;
+    padding:0.75rem 1rem;border-radius:8px;outline:none;
+    transition:border-color 0.2s;width:100%;
+  }
+  .field input:focus{border-color:rgba(255,77,0,0.5)}
+  .pw-wrap{position:relative}
+  .pw-wrap input{padding-right:2.75rem}
+  .pw-toggle{
+    position:absolute;right:0.75rem;top:50%;transform:translateY(-50%);
+    background:none;border:none;color:var(--muted);cursor:pointer;padding:0.2rem;
+    transition:color 0.2s;line-height:1;
+  }
+  .pw-toggle:hover{color:var(--text)}
+
+  /* Password strength */
+  .pw-strength{display:flex;gap:0.25rem;margin-top:0.35rem}
+  .pw-bar{height:3px;flex:1;border-radius:2px;background:var(--surface2);transition:background 0.3s}
+  .pw-bar.weak{background:var(--error)}
+  .pw-bar.fair{background:#ffd600}
+  .pw-bar.strong{background:var(--success)}
+  .pw-label{font-size:0.65rem;color:var(--muted);margin-top:0.2rem}
+
+  /* Buttons */
+  .btn{
+    width:100%;display:flex;align-items:center;justify-content:center;gap:0.6rem;
+    font-family:'Outfit',sans-serif;font-weight:700;font-size:0.95rem;
+    padding:0.85rem;border-radius:8px;border:none;cursor:pointer;
+    transition:all 0.2s;position:relative;overflow:hidden;
+  }
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 24px rgba(255,77,0,0.4)}
+  .btn-primary:disabled{opacity:0.45;cursor:not-allowed;transform:none}
+  .btn-primary.loading::after{
+    content:'';position:absolute;right:1rem;top:50%;
+    width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);
+    border-top-color:#fff;border-radius:50%;
+    animation:spin 0.7s linear infinite;
+    transform:translateY(-50%);
+  }
+  @keyframes spin{to{transform:translateY(-50%) rotate(360deg)}}
+  .btn-ghost{
+    background:none;border:none;color:var(--muted);font-family:'Outfit',sans-serif;
+    font-size:0.83rem;cursor:pointer;padding:0.25rem 0;text-align:center;
+    transition:color 0.2s;width:100%;
+  }
+  .btn-ghost:hover{color:var(--text)}
+
+  /* Alerts */
+  .alert{
+    display:flex;align-items:flex-start;gap:0.6rem;
+    padding:0.8rem 1rem;border-radius:8px;font-size:0.83rem;line-height:1.5;
+    border:1px solid transparent;
+  }
+  .alert.error{background:rgba(255,77,109,0.08);border-color:rgba(255,77,109,0.2);color:#ff8fa3}
+  .alert.success{background:rgba(0,230,118,0.08);border-color:rgba(0,230,118,0.2);color:var(--green)}
+  .alert.info{background:rgba(0,200,255,0.08);border-color:rgba(0,200,255,0.2);color:var(--accent2)}
+  .alert-hidden{display:none}
+
+  .divider{height:1px;background:var(--border);margin:0.25rem 0}
+
+  .email-chip{
+    font-family:'Space Mono',monospace;font-size:0.75rem;letter-spacing:0.05em;
+    color:var(--muted);background:var(--surface2);border:1px solid var(--border);
+    border-radius:6px;padding:0.5rem 0.85rem;
+    display:flex;align-items:center;justify-content:space-between;gap:0.5rem;
+  }
+  .email-chip span{color:var(--text)}
+  .email-chip button{
+    background:none;border:none;color:var(--muted);font-size:0.7rem;
+    cursor:pointer;transition:color 0.2s;white-space:nowrap;
+    font-family:'Outfit',sans-serif;
+  }
+  .email-chip button:hover{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <a href="index.html" class="back-link">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15,18 9,12 15,6"/></svg>
+      Back to SquashLive
+    </a>
+    <div class="logo">Squash<span>Live</span></div>
+    <div class="card-title" id="cardTitle">Host Sign In</div>
+    <div class="card-sub" id="cardSub">Enter your approved email to continue.</div>
+  </div>
+
+  <!-- STEP 1: Email -->
+  <div class="step active" id="stepEmail">
+    <div class="field">
+      <label>Email address</label>
+      <input type="email" id="emailInput" placeholder="you@yourclub.com" autocomplete="email"/>
+    </div>
+    <div id="emailAlert" class="alert-hidden"></div>
+    <button class="btn btn-primary" id="emailBtn" onclick="submitEmail()">Continue</button>
+  </div>
+
+  <!-- STEP 2: Password (sign in or create) -->
+  <div class="step" id="stepPassword">
+    <div class="email-chip">
+      <span id="emailChipText"></span>
+      <button onclick="backToEmail()">Change ↩</button>
+    </div>
+    <div class="field">
+      <label id="passwordLabel">Password</label>
+      <div class="pw-wrap">
+        <input type="password" id="passwordInput" placeholder="Enter your password" autocomplete="current-password" oninput="onPasswordInput()"/>
+        <button class="pw-toggle" onclick="togglePw('passwordInput')" tabindex="-1">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <!-- Strength bars shown only for new accounts -->
+      <div class="pw-strength" id="pwStrength" style="display:none">
+        <div class="pw-bar" id="bar1"></div>
+        <div class="pw-bar" id="bar2"></div>
+        <div class="pw-bar" id="bar3"></div>
+        <div class="pw-bar" id="bar4"></div>
+      </div>
+      <div class="pw-label" id="pwLabel" style="display:none">Enter a password</div>
+    </div>
+    <!-- Confirm field shown only for new accounts -->
+    <div class="field" id="confirmField" style="display:none">
+      <label>Confirm password</label>
+      <div class="pw-wrap">
+        <input type="password" id="confirmInput" placeholder="Confirm your password" autocomplete="new-password"/>
+        <button class="pw-toggle" onclick="togglePw('confirmInput')" tabindex="-1">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="passwordAlert" class="alert-hidden"></div>
+    <button class="btn btn-primary" id="passwordBtn" onclick="submitPassword()">Sign In</button>
+    <div class="divider"></div>
+    <button class="btn-ghost" onclick="goToForgot()">Forgot password? Send reset link</button>
+  </div>
+
+  <!-- STEP 3: Reset sent -->
+  <div class="step" id="stepResetSent">
+    <div class="alert success">
+      <span>✓</span>
+      <span>Reset link sent — check your inbox and click the link to set a new password.</span>
+    </div>
+    <button class="btn btn-primary" onclick="backToEmail()">Back to Sign In</button>
+  </div>
+
+  <!-- STEP 4: Set new password (after clicking reset link in email) -->
+  <div class="step" id="stepNewPassword">
+    <div class="alert info" style="display:flex">
+      <span>🔑</span>
+      <span>Choose a new password for your account.</span>
+    </div>
+    <div class="field">
+      <label>New password</label>
+      <div class="pw-wrap">
+        <input type="password" id="newPwInput" placeholder="New password" autocomplete="new-password" oninput="strengthFor('newPwInput','newBar','newPwLabel')"/>
+        <button class="pw-toggle" onclick="togglePw('newPwInput')" tabindex="-1">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div class="pw-strength">
+        <div class="pw-bar" id="newBar1"></div>
+        <div class="pw-bar" id="newBar2"></div>
+        <div class="pw-bar" id="newBar3"></div>
+        <div class="pw-bar" id="newBar4"></div>
+      </div>
+      <div class="pw-label" id="newPwLabel">Enter a password</div>
+    </div>
+    <div class="field">
+      <label>Confirm new password</label>
+      <input type="password" id="newPwConfirm" placeholder="Confirm password" autocomplete="new-password"/>
+    </div>
+    <div id="newPwAlert" class="alert-hidden"></div>
+    <button class="btn btn-primary" id="newPwBtn" onclick="submitNewPassword()">Set Password &amp; Sign In</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://bmhaihybdnaufprysjbw.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_0QwuePBb2qNgaDR_5rI0Uw_DS_NpjSV';
+// Capture hash BEFORE createClient — Supabase clears it when processing tokens
+const _initialHash = window.location.hash;
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentEmail = '';
+let isNewUser = false; // true = no account yet, false = account exists
+
+// ── ON LOAD ───────────────────────────────────────────────────────────────────
+(async () => {
+  // Parse tokens from hash — must do this for both recovery and invite
+  const hashParams = new URLSearchParams(_initialHash.replace(/^#/, ''));
+  const accessToken = hashParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token');
+  const tokenType = hashParams.get('type');
+
+  if (tokenType === 'recovery' || tokenType === 'invite') {
+    window.history.replaceState(null, '', window.location.pathname);
+
+    // Explicitly establish session — createClient clears the hash but doesn't
+    // always fully exchange these token types into a working session
+    if (accessToken && refreshToken) {
+      const { error: sessionError } = await sb.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken
+      });
+      if (sessionError) {
+        showStep('stepEmail', 'Link Expired', 'This link has already been used or has expired. Please request a new one.');
+        showAlert('emailAlert', 'error', sessionError.message);
+        return;
+      }
+    }
+
+    if (tokenType === 'recovery') {
+      showStep('stepNewPassword', 'Set New Password', 'Choose a new password for your account.');
+    } else {
+      showStep('stepNewPassword', 'Welcome! Set Your Password', 'Choose a password to activate your host account.');
+      document.getElementById('newPwAlert').className = 'alert info';
+      document.getElementById('newPwAlert').style.display = 'flex';
+      document.getElementById('newPwAlert').innerHTML = '<span>🎾</span><span>Your account is approved. Set a password to get started.</span>';
+    }
+    return;
+  }
+
+  // Normal flow — already signed in → go to broadcast
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) { window.location.href = 'broadcast.html'; return; }
+})();
+
+// ── STEP 1: EMAIL ─────────────────────────────────────────────────────────────
+async function submitEmail() {
+  const email = document.getElementById('emailInput').value.trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    showAlert('emailAlert', 'error', 'Please enter a valid email address.');
+    return;
+  }
+
+  const btn = document.getElementById('emailBtn');
+  setLoading(btn, true);
+  clearAlert('emailAlert');
+
+  // 1. Check approved list
+  try {
+    const r = await fetch('/api/check-approved', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await r.json();
+    if (!data.approved) {
+      setLoading(btn, false);
+      showAlert('emailAlert', 'error', 'This email is not on the approved hosts list. Contact your administrator.');
+      return;
+    }
+  } catch(e) {
+    setLoading(btn, false);
+    showAlert('emailAlert', 'error', 'Could not verify — check your connection and try again.');
+    return;
+  }
+
+  // 2. Detect new vs existing account by attempting sign-in with a dummy password.
+  //    "Invalid login credentials" = account EXISTS (but wrong password).
+  //    Any other outcome = account does NOT exist yet.
+  const { error: probeErr } = await sb.auth.signInWithPassword({
+    email, password: '##DETECT##'
+  });
+
+  setLoading(btn, false);
+  currentEmail = email;
+
+  const msg = probeErr ? probeErr.message.toLowerCase() : '';
+  if (!probeErr || msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
+    // Account exists — show sign in UI
+    isNewUser = false;
+    showPasswordStep(false);
+  } else {
+    // Account does not exist — show create password UI
+    isNewUser = true;
+    showPasswordStep(true);
+  }
+}
+
+function showPasswordStep(isNew) {
+  document.getElementById('emailChipText').textContent = currentEmail;
+  document.getElementById('passwordLabel').textContent = isNew ? 'Create a password' : 'Password';
+  document.getElementById('passwordInput').placeholder = isNew ? 'Create a password' : 'Enter your password';
+  document.getElementById('passwordInput').autocomplete = isNew ? 'new-password' : 'current-password';
+  document.getElementById('passwordInput').value = '';
+  document.getElementById('pwStrength').style.display = isNew ? 'flex' : 'none';
+  document.getElementById('pwLabel').style.display = isNew ? 'block' : 'none';
+  document.getElementById('confirmField').style.display = isNew ? 'block' : 'none';
+  document.getElementById('passwordBtn').textContent = isNew ? 'Create Account & Sign In' : 'Sign In';
+  clearAlert('passwordAlert');
+  showStep('stepPassword',
+    isNew ? 'Create Account' : 'Welcome Back',
+    isNew ? 'Choose a password for your host account.' : 'Enter your password to go live.'
+  );
+  setTimeout(() => document.getElementById('passwordInput').focus(), 100);
+}
+
+// ── STEP 2: PASSWORD ──────────────────────────────────────────────────────────
+async function submitPassword() {
+  const password = document.getElementById('passwordInput').value;
+  if (!password) { showAlert('passwordAlert', 'error', 'Please enter a password.'); return; }
+
+  const btn = document.getElementById('passwordBtn');
+  setLoading(btn, true);
+  clearAlert('passwordAlert');
+
+  if (isNewUser) {
+    // Validate confirm field
+    const confirm = document.getElementById('confirmInput').value;
+    if (password.length < 8) {
+      setLoading(btn, false);
+      showAlert('passwordAlert', 'error', 'Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirm) {
+      setLoading(btn, false);
+      showAlert('passwordAlert', 'error', 'Passwords do not match.');
+      return;
+    }
+    // Create account — email confirm is DISABLED in Supabase so auto-signs in
+    const { error } = await sb.auth.signUp({ email: currentEmail, password });
+    setLoading(btn, false);
+    if (error) {
+      if (error.message.toLowerCase().includes('already registered')) {
+        // Race: someone created it between steps — switch to sign in mode
+        isNewUser = false;
+        showPasswordStep(false);
+        showAlert('passwordAlert', 'info', 'Account already exists. Please sign in with your password.');
+      } else {
+        showAlert('passwordAlert', 'error', error.message);
+      }
+    } else {
+      window.location.href = 'broadcast.html';
+    }
+  } else {
+    // Sign in
+    const { error } = await sb.auth.signInWithPassword({ email: currentEmail, password });
+    setLoading(btn, false);
+    if (error) {
+      showAlert('passwordAlert', 'error',
+        'Incorrect password. Try again or use "Forgot password?" below.');
+    } else {
+      window.location.href = 'broadcast.html';
+    }
+  }
+}
+
+// ── FORGOT PASSWORD ───────────────────────────────────────────────────────────
+async function goToForgot() {
+  const btn = document.getElementById('passwordBtn');
+  setLoading(btn, true);
+  clearAlert('passwordAlert');
+
+  const { error } = await sb.auth.resetPasswordForEmail(currentEmail, {
+    redirectTo: window.location.origin + '/auth.html'
+  });
+  setLoading(btn, false);
+
+  if (error) {
+    showAlert('passwordAlert', 'error', error.message);
+  } else {
+    showStep('stepResetSent', 'Check Your Email', 'Follow the link to set a new password.');
+  }
+}
+
+// ── SET NEW PASSWORD (after reset link) ───────────────────────────────────────
+async function submitNewPassword() {
+  const password = document.getElementById('newPwInput').value;
+  const confirm  = document.getElementById('newPwConfirm').value;
+  if (password.length < 8) { showAlert('newPwAlert', 'error', 'Password must be at least 8 characters.'); return; }
+  if (password !== confirm)  { showAlert('newPwAlert', 'error', 'Passwords do not match.'); return; }
+
+  const btn = document.getElementById('newPwBtn');
+  setLoading(btn, true);
+  clearAlert('newPwAlert');
+
+  const { error } = await sb.auth.updateUser({ password });
+  setLoading(btn, false);
+  if (error) {
+    showAlert('newPwAlert', 'error', error.message);
+  } else {
+    window.location.href = 'index.html';
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function backToEmail() {
+  currentEmail = '';
+  isNewUser = false;
+  document.getElementById('emailInput').value = '';
+  showStep('stepEmail', 'Host Sign In', 'Enter your approved email to continue.');
+  setTimeout(() => document.getElementById('emailInput').focus(), 100);
+}
+
+function showStep(id, title, sub) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.getElementById('cardTitle').textContent = title;
+  document.getElementById('cardSub').textContent = sub;
+}
+
+function onPasswordInput() {
+  if (isNewUser) strengthFor('passwordInput', 'bar', 'pwLabel');
+}
+
+function strengthFor(inputId, barPrefix, labelId) {
+  const pw = document.getElementById(inputId).value;
+  const label = document.getElementById(labelId);
+  [1,2,3,4].forEach(i => {
+    const b = document.getElementById(barPrefix + i);
+    if (b) b.className = 'pw-bar';
+  });
+  if (!pw) { label.textContent = 'Enter a password'; return; }
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw) || /[^A-Za-z0-9]/.test(pw)) score++;
+  score = Math.min(score, 4);
+  const cls = ['weak','weak','fair','strong'];
+  for (let i = 0; i < score; i++) {
+    const b = document.getElementById(barPrefix + i);
+    if (b) b.classList.add(cls[score - 1]);
+  }
+  label.textContent = score < 2 ? 'Too weak' : score < 3 ? 'Fair' : 'Strong';
+}
+
+function togglePw(id) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function setLoading(btn, loading) {
+  btn.disabled = loading;
+  btn.classList.toggle('loading', loading);
+}
+
+function showAlert(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = 'alert ' + type;
+  el.style.display = 'flex';
+  el.innerHTML = '<span>' + msg + '</span>';
+}
+
+function clearAlert(id) {
+  const el = document.getElementById(id);
+  el.className = 'alert-hidden';
+  el.style.display = 'none';
+}
+
+// Enter key support
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const active = document.querySelector('.step.active');
+  if (active) active.querySelector('.btn.btn-primary')?.click();
+});
+</script>
+</body>
+</html>

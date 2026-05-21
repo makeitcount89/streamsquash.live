@@ -1,0 +1,2141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SquashLive — Watch</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000;--surface:rgba(10,12,16,0.96);
+  --accent:#ff4d00;--accent2:#00c8ff;
+  --text:#f0f0f0;--muted:#6b7280;
+  --border:rgba(255,255,255,0.1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#000;overflow:hidden}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Outfit',sans-serif;color:#fff}
+
+/* VIDEO */
+#videoWrap{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center}
+video{width:100%;height:100%;object-fit:contain}
+
+/* SCORE OVERLAY — TV broadcast style */
+.score-pts-row{display:flex;align-items:baseline;gap:0.2rem;justify-content:center}
+.score-games-bracket{font-family:'Space Mono',monospace;font-size:0.7rem;color:rgba(255,255,255,0.45);letter-spacing:0}
+#scoreBox{
+  position:fixed;bottom:0;left:0;right:0;z-index:10;
+  display:none;
+  padding:0 0 env(safe-area-inset-bottom,0);
+}
+.score-inner{
+  background:linear-gradient(135deg,rgba(0,0,0,0.92) 0%,rgba(15,19,24,0.95) 100%);
+  border-top:1px solid rgba(255,255,255,0.08);
+  padding:0.75rem 0.75rem;
+  display:flex;align-items:center;justify-content:space-between;gap:0.5rem;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  flex-wrap:nowrap;overflow:hidden;
+}
+.score-game-badge{
+  font-family:'Space Mono',monospace;font-size:0.5rem;letter-spacing:0.1em;
+  color:var(--accent);background:rgba(255,77,0,0.12);border:1px solid rgba(255,77,0,0.25);
+  padding:0.2rem 0.4rem;border-radius:3px;white-space:nowrap;flex-shrink:0;
+  display:none;
+}
+@media(min-width:400px){.score-game-badge{display:block}}
+
+/* Landscape mobile — move score to left side vertical strip */
+@media(orientation:landscape) and (max-height:500px){
+  #scoreBox{
+    bottom:0;top:0;left:0;right:auto;
+    width:80px;
+    padding:0;
+    display:flex!important;
+    flex-direction:column;
+    z-index:10;
+  }
+  #scoreBox[style*="display:none"]{display:none!important}
+
+  /* Main score inner — game badge + players + live badge */
+  .score-inner{
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:0.5rem;
+    padding:0.6rem 0.35rem;
+    flex:1;
+    border-top:none;
+    border-right:1px solid rgba(255,255,255,0.08);
+    position:relative;
+  }
+
+  /* Game badge — show horizontally, smaller */
+  .score-game-badge{
+    display:flex!important;
+    font-size:0.4rem;
+    letter-spacing:0.08em;
+    padding:0.2rem 0.35rem;
+    white-space:nowrap;
+    writing-mode:initial;
+    transform:none;
+  }
+
+  .score-players{
+    flex-direction:column;
+    gap:0.5rem;
+    align-items:center;
+    flex:1;
+    justify-content:center;
+  }
+  .score-player,.score-player.p2{
+    flex-direction:column;
+    align-items:center;
+    gap:0.15rem;
+  }
+  .score-divider{
+    font-size:0.9rem;
+    transform:rotate(90deg);
+    line-height:1;
+  }
+  .score-pts{
+    font-size:clamp(1.3rem,5.5vh,1.8rem);
+  }
+  .score-name{
+    font-size:0.4rem;
+    max-width:72px;
+    text-align:center;
+    letter-spacing:0.04em;
+  }
+  /* LIVE badge — fixed top-right of screen in the black area beside the video */
+  .score-live{
+    position:fixed!important;
+    top:0.5rem!important;
+    right:0.5rem!important;
+    bottom:auto!important;
+    left:auto!important;
+    flex-direction:row;
+    gap:0.2rem;
+    font-size:0.38rem;
+    background:rgba(0,0,0,0.6);
+    padding:0.2rem 0.4rem;
+    border-radius:4px;
+    backdrop-filter:blur(6px);
+  }
+
+  /* P2 player — must use !important because base rule is declared after this media query */
+  .score-player.p2{
+    flex-direction:column!important;
+    align-items:center!important;
+  }
+  .score-pts-row{
+    flex-direction:column;
+    align-items:center;
+    gap:0.05rem;
+  }
+  .score-games-bracket{
+    font-size:0.5rem;
+  }
+
+  /* Game history strip — show below score inner as vertical chips */
+  #gameHistoryStrip{
+    display:flex!important;
+    flex-direction:column!important;
+    padding:0.4rem 0.25rem!important;
+    border-top:1px solid rgba(255,255,255,0.06)!important;
+    border-right:1px solid rgba(255,255,255,0.08)!important;
+    gap:0.25rem!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    align-items:center!important;
+    background:linear-gradient(135deg,rgba(0,0,0,0.92) 0%,rgba(15,19,24,0.95) 100%);
+    backdrop-filter:blur(12px);
+    scrollbar-width:none;
+  }
+  #gameHistoryStrip > span{
+    font-size:0.38rem!important;
+    letter-spacing:0.1em!important;
+    writing-mode:initial!important;
+    margin-bottom:0.1rem;
+  }
+  #gameHistoryChips{
+    display:flex!important;
+    flex-direction:column!important;
+    gap:0.2rem!important;
+    flex-wrap:nowrap!important;
+    align-items:center;
+  }
+  /* Individual chips — compact for sidebar */
+  #gameHistoryChips span{
+    font-size:0.52rem!important;
+    padding:0.15rem 0.3rem!important;
+    white-space:nowrap;
+    text-align:center;
+  }
+
+  /* Shift video right to clear the sidebar */
+  #vid{
+    margin-left:80px;
+    width:calc(100% - 80px);
+  }
+  #streamWrap video{
+    margin-left:0;
+    width:100%;
+  }
+}
+.score-players{display:flex;align-items:center;gap:0.5rem;flex:1;justify-content:center;min-width:0}
+.score-player{display:flex;align-items:center;gap:0.4rem;min-width:0;flex-shrink:1}
+.score-player.p2{flex-direction:row-reverse}
+.score-name{font-family:'Space Mono',monospace;font-size:0.55rem;letter-spacing:0.06em;
+  color:var(--muted);text-transform:uppercase;max-width:70px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;flex-shrink:1}
+.score-pts{
+  font-family:'Bebas Neue',sans-serif;font-size:clamp(1.4rem,5vw,2.4rem);line-height:1;
+  min-width:1.5ch;text-align:center;flex-shrink:0;
+}
+.score-pts.p1{color:var(--accent)}
+.score-pts.p2{color:var(--accent2)}
+.score-divider{color:rgba(255,255,255,0.15);font-family:'Bebas Neue',sans-serif;font-size:1.8rem}
+.score-games{font-family:'Space Mono',monospace;font-size:0.55rem;color:var(--muted);
+  letter-spacing:0.05em;display:block;margin-top:0.1rem;text-align:center}
+.score-live{
+  display:flex;align-items:center;gap:0.4rem;
+  font-family:'Space Mono',monospace;font-size:0.55rem;letter-spacing:0.15em;
+  color:var(--accent);flex-shrink:0;
+}
+.live-pulse{width:5px;height:5px;border-radius:50%;background:var(--accent);
+  animation:pulse 1.2s ease infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.3;transform:scale(0.8)}}
+
+/* FLAG BUTTON */
+#flagBtn{
+  position:fixed;top:1rem;right:1rem;z-index:30;
+  background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.12);
+  color:rgba(255,255,255,0.4);
+  font-family:'Outfit',sans-serif;font-size:0.72rem;font-weight:500;
+  padding:0.45rem 0.85rem;border-radius:6px;cursor:pointer;
+  display:none;align-items:center;gap:0.4rem;
+  transition:all 0.2s;backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+}
+#flagBtn:hover{background:rgba(220,38,38,0.15);border-color:rgba(220,38,38,0.35);
+  color:rgba(255,120,120,0.9);}
+#flagBtn.flagged{background:rgba(220,38,38,0.12);border-color:rgba(220,38,38,0.3);
+  color:rgba(255,120,120,0.7);cursor:default;pointer-events:none}
+
+/* FLAG MODAL */
+#flagModal{
+  position:fixed;inset:0;z-index:100;
+  background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  display:none;align-items:center;justify-content:center;padding:1.5rem;
+}
+#flagModal.open{display:flex}
+.flag-card{
+  background:#0f1318;border:1px solid var(--border);border-radius:14px;
+  padding:1.75rem;max-width:340px;width:100%;position:relative;
+}
+.flag-card::before{
+  content:'';position:absolute;top:0;left:20%;right:20%;height:2px;
+  background:linear-gradient(to right,transparent,#dc2626,transparent);border-radius:2px;
+}
+.flag-icon{font-size:2rem;margin-bottom:0.75rem;display:block}
+.flag-title{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.03em;
+  margin-bottom:0.5rem}
+.flag-desc{font-size:0.83rem;color:var(--muted);line-height:1.6;margin-bottom:1.25rem}
+.flag-actions{display:flex;gap:0.65rem}
+.flag-cancel{
+  flex:1;padding:0.7rem;border-radius:8px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);font-family:'Outfit',sans-serif;
+  font-size:0.85rem;cursor:pointer;transition:all 0.2s;
+}
+.flag-cancel:hover{border-color:rgba(255,255,255,0.2);color:var(--text)}
+.flag-confirm{
+  flex:1;padding:0.7rem;border-radius:8px;border:none;
+  background:#dc2626;color:#fff;font-family:'Outfit',sans-serif;
+  font-weight:600;font-size:0.85rem;cursor:pointer;transition:all 0.2s;
+}
+.flag-confirm:hover{background:#b91c1c}
+.flag-confirm:disabled{opacity:0.45;cursor:not-allowed}
+.flag-success{
+  text-align:center;padding:0.5rem 0;
+  font-size:0.85rem;color:#86efac;display:none;
+}
+
+/* STATUS SCREEN */
+#status{
+  position:fixed;inset:0;z-index:20;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--bg);gap:1.25rem;text-align:center;padding:2rem;
+}
+.status-logo{
+  font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:0.08em;
+  color:var(--muted);margin-bottom:0.5rem;
+}
+.status-logo span{color:var(--accent)}
+.spinner{
+  width:36px;height:36px;
+  border:2px solid rgba(255,255,255,0.07);
+  border-top-color:var(--accent);
+  border-radius:50%;animation:spin 0.75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#statusTitle{
+  font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:0.03em;
+}
+#statusMsg{color:var(--muted);font-size:0.88rem;max-width:280px;line-height:1.65}
+
+/* Code entry */
+#codeEntry{
+  display:none;flex-direction:column;gap:0.75rem;
+  width:100%;max-width:320px;margin-top:0.5rem;
+}
+.code-input{
+  padding:0.8rem 1rem;border-radius:8px;
+  border:1px solid var(--border);background:#161c24;
+  color:#fff;font-size:0.92rem;font-family:'Space Mono',monospace;
+  text-transform:uppercase;letter-spacing:0.08em;width:100%;outline:none;
+  transition:border-color 0.2s;
+}
+.code-input:focus{border-color:rgba(0,200,255,0.4)}
+.code-input::placeholder{font-size:0.72rem;letter-spacing:0.04em;color:var(--muted);
+  font-family:'Outfit',sans-serif;text-transform:none}
+.code-btn{
+  width:100%;padding:0.8rem;border-radius:8px;border:none;
+  background:var(--accent);color:#fff;font-family:'Outfit',sans-serif;
+  font-weight:700;font-size:0.92rem;cursor:pointer;transition:all 0.2s;
+}
+.code-btn:hover{background:#e04400;transform:translateY(-1px)}
+.code-back{
+  color:rgba(255,255,255,0.25);font-size:0.75rem;
+  text-align:center;text-decoration:none;display:block;transition:color 0.2s;
+}
+.code-back:hover{color:var(--muted)}
+
+/* RECORD BUTTON */
+#recBtn{
+  position:fixed;top:1rem;left:1rem;z-index:30;
+  background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.12);
+  color:rgba(255,255,255,0.55);
+  font-family:'Outfit',sans-serif;font-size:0.72rem;font-weight:500;
+  padding:0.45rem 0.85rem;border-radius:6px;cursor:pointer;
+  display:none;align-items:center;gap:0.45rem;
+  transition:all 0.2s;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+#recBtn:hover{background:rgba(0,0,0,0.75);border-color:rgba(255,255,255,0.22);color:#fff}
+#recBtn.recording{
+  background:rgba(220,38,38,0.18);border-color:rgba(220,38,38,0.45);color:#fca5a5;
+}
+#recBtn .rec-dot{
+  width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.4);flex-shrink:0;transition:background 0.2s;
+}
+#recBtn.recording .rec-dot{background:#f87171;animation:rec-pulse 1s ease infinite}
+@keyframes rec-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.rec-timer{font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:0.05em}
+
+/* BANNED BANNER */
+#bannedBanner{
+  position:fixed;inset:0;z-index:50;
+  background:rgba(0,0,0,0.92);backdrop-filter:blur(8px);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:1rem;padding:2rem;text-align:center;
+}
+.banned-icon{font-size:3rem;opacity:0.8}
+.banned-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:0.04em;color:#fca5a5}
+.banned-sub{color:var(--muted);font-size:0.88rem;max-width:300px;line-height:1.65}
+.banned-home{
+  margin-top:0.5rem;display:inline-flex;align-items:center;gap:0.5rem;
+  background:rgba(255,255,255,0.07);border:1px solid var(--border);
+  color:var(--text);font-size:0.82rem;font-weight:500;
+  padding:0.65rem 1.25rem;border-radius:6px;text-decoration:none;transition:all 0.2s;
+}
+.banned-home:hover{border-color:rgba(255,255,255,0.2)}
+</style>
+
+  <meta name="theme-color" content="#ff4d00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SquashLive">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+</head>
+<body>
+
+<!-- Consent Modal -->
+<div id="consentModal" style="
+  position:fixed;inset:0;z-index:9999;
+  background:rgba(7,9,12,0.97);
+  display:flex;align-items:flex-start;justify-content:center;
+  padding:1.5rem;
+  overflow-y:auto;
+  backdrop-filter:blur(8px);">
+  <div style="
+    max-width:420px;width:100%;
+    background:#0f1318;
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:16px;
+    overflow:visible;
+    margin:auto;">
+    <div style="height:2px;background:linear-gradient(to right,transparent,#ff4d00,transparent)"></div>
+    <div style="padding:2rem">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:0.05em;margin-bottom:0.25rem">
+        Squash<span style="color:#ff4d00">Live</span>
+      </div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:0.03em;margin-bottom:1.25rem;color:#f0f0f0">
+        Before You Watch
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:1.5rem">
+        <div style="display:flex;gap:0.75rem;align-items:flex-start;font-size:0.85rem;color:#c0c0c0;line-height:1.5">
+          <span style="font-size:1rem;flex-shrink:0">🎾</span>
+          <span>SquashLive streams <strong style="color:#f0f0f0">grassroots squash matches</strong> including junior, senior and pennant competitions.</span>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:flex-start;font-size:0.85rem;color:#c0c0c0;line-height:1.5">
+          <span style="font-size:1rem;flex-shrink:0">👨‍👩‍👧</span>
+          <span>Streams may include <strong style="color:#f0f0f0">junior players under 18</strong>. All junior players have provided parental consent to be broadcast through their club.</span>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:flex-start;font-size:0.85rem;color:#c0c0c0;line-height:1.5">
+          <span style="font-size:1rem;flex-shrink:0">🚩</span>
+          <span>If you witness <strong style="color:#f0f0f0">inappropriate, abusive, or harmful content</strong>, please use the Report button immediately.</span>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:flex-start;font-size:0.85rem;color:#c0c0c0;line-height:1.5">
+          <span style="font-size:1rem;flex-shrink:0">⚠️</span>
+          <span>SquashLive provides a platform for live squash broadcasts only. <strong style="color:#f0f0f0">We accept no responsibility or liability</strong> for user-generated content streamed on this platform.</span>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:flex-start;font-size:0.85rem;color:#c0c0c0;line-height:1.5">
+          <span style="font-size:1rem;flex-shrink:0">📋</span>
+          <span>By watching you agree to use this platform respectfully. Misuse will result in immediate action and reporting to relevant authorities.</span>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:flex-start;font-size:0.85rem;color:#c0c0c0;line-height:1.5">
+          <span style="font-size:1rem;flex-shrink:0">📡</span>
+          <span>To keep streams running smoothly, <strong style="color:#f0f0f0">your device may automatically relay the video</strong> to other nearby viewers. This uses your existing connection and requires no action from you.</span>
+        </div>
+      </div>
+      <label style="display:flex;align-items:flex-start;gap:0.65rem;cursor:pointer;margin-bottom:0.5rem">
+        <input type="checkbox" id="viewerConsent" onchange="const btn=document.getElementById('watchBtn');btn.disabled=!this.checked;btn.style.opacity=this.checked?'1':'0.4';"
+          style="width:15px;height:15px;margin-top:0.2rem;flex-shrink:0;accent-color:#ff4d00;cursor:pointer">
+        <span style="font-size:0.8rem;color:#c0c0c0;line-height:1.5">
+          I agree to watch respectfully, understand streams may include junior players, I will
+          <strong style="color:#f0f0f0">report</strong> anything inappropriate immediately, and I consent to
+          <strong style="color:#f0f0f0">automatically relay the stream</strong> to other viewers if needed.
+        </span>
+      </label>
+      <button id="watchBtn" onclick="acceptConsent()" disabled style="
+        width:100%;padding:0.9rem;
+        background:#ff4d00;color:#fff;
+        font-family:'Outfit',sans-serif;font-weight:700;font-size:0.95rem;
+        border:none;border-radius:8px;cursor:pointer;
+        transition:opacity 0.2s;opacity:0.4;">
+        Watch Stream
+      </button>
+      <div style="margin-top:0.85rem;text-align:center">
+        <a href="index.html" style="font-size:0.78rem;color:#6b7280;text-decoration:none">
+          Take me back
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="videoWrap">
+  <!-- Ad Player — shown before stream starts -->
+<div id="adPlayer" style="display:none;position:fixed;inset:0;z-index:9998;background:#000;flex-direction:column;align-items:center;justify-content:center">
+  <video id="adVideo" playsinline style="max-width:100%;max-height:85vh;width:100%"></video>
+  <div style="position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);width:calc(100% - 3rem);max-width:420px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+      <div style="font-family:'Space Mono',monospace;font-size:0.65rem;color:rgba(255,255,255,0.5);letter-spacing:0.1em">COMMUNITY SPONSOR</div>
+      <div id="adCountdown" style="font-family:'Space Mono',monospace;font-size:0.72rem;color:rgba(255,255,255,0.6)">0s</div>
+    </div>
+    <div style="height:3px;background:rgba(255,255,255,0.15);border-radius:2px;overflow:hidden">
+      <div id="adProgressBar" style="height:100%;background:#ff4d00;width:0%;transition:width 0.1s linear;border-radius:2px"></div>
+    </div>
+    <div style="margin-top:0.6rem;display:flex;align-items:center;gap:0.5rem">
+      <div style="width:8px;height:8px;background:#ff4d00;border-radius:50%;animation:pulse 1s infinite"></div>
+      <div style="font-size:0.72rem;color:rgba(255,255,255,0.4)">Stream will start automatically</div>
+    </div>
+  </div>
+</div>
+
+<div id="streamWrap" style="position:relative;width:100%;height:100%">
+  <video id="vid" autoplay muted playsinline style="width:100%;height:100%;object-fit:contain;background:#000;display:block"></video>
+  <!-- Replay button inside streamWrap — visible in fullscreen, left side -->
+  <button id="viewerReplayBtnFS" onclick="viewerTriggerReplay()"
+    style="display:none;position:absolute;bottom:0.75rem;left:0.75rem;z-index:50;
+      background:rgba(0,0,0,0.45);border:1px solid rgba(0,200,255,0.25);
+      color:rgba(0,200,255,0.75);font-family:'Space Mono',monospace;font-size:0.58rem;
+      letter-spacing:0.06em;padding:0.35rem 0.7rem;border-radius:5px;cursor:pointer;
+      align-items:center;gap:0.3rem;backdrop-filter:blur(6px);opacity:0.7;
+      transition:opacity 0.2s;"
+    onmouseenter="this.style.opacity='1'"
+    onmouseleave="this.style.opacity='0.7'"
+    title="Instant Replay">
+    ⏪ Replay
+  </button>
+  <!-- scoreBox is inside streamWrap so it stays visible in fullscreen -->
+</div>
+</div>
+
+<!-- ── INSTANT REPLAY OVERLAY ─────────────────────────────────────────────── -->
+<!-- Built dynamically by showViewerReplayOverlay() -->
+
+<div id="scoreBox">
+  <div class="score-inner">
+    <div class="score-game-badge" id="gameInfo">GAME 1</div>
+    <div class="score-players">
+      <div class="score-player p1">
+        <div class="score-pts-row">
+          <span class="score-pts p1" id="p1pts">0</span>
+          <span class="score-games-bracket" id="p1games"></span>
+        </div>
+        <div class="score-name" id="p1name">P1</div>
+      </div>
+      <div class="score-divider">–</div>
+      <div class="score-player p2">
+        <div class="score-pts-row">
+          <span class="score-pts p2" id="p2pts">0</span>
+          <span class="score-games-bracket" id="p2games"></span>
+        </div>
+        <div class="score-name" id="p2name">P2</div>
+      </div>
+    </div>
+    <div class="score-live"><div class="live-pulse"></div>LIVE</div>
+  </div>
+  <!-- Game history strip (shown after first game completes) -->
+  <div id="gameHistoryStrip" style="display:none;padding:0.4rem 1.25rem;border-top:1px solid rgba(255,255,255,0.06);display:none;gap:0.5rem;align-items:center;overflow-x:auto;scrollbar-width:none">
+    <span style="font-family:'Space Mono',monospace;font-size:0.5rem;letter-spacing:0.15em;color:#6b7280;white-space:nowrap;flex-shrink:0">RESULTS</span>
+    <div id="gameHistoryChips" style="display:flex;gap:0.4rem;flex-wrap:nowrap"></div>
+  </div>
+</div>
+
+<button id="flagBtn" onclick="openFlag()">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+  Report Stream
+</button>
+
+<button id="recBtn" onclick="toggleRecord()">
+  <span class="rec-dot"></span>
+  <span id="recBtnLabel">REC</span>
+  <span class="rec-timer" id="recTimer" style="display:none">00:00</span>
+</button>
+
+<button id="fullscreenBtn" onclick="toggleFullscreen()"
+  style="position:fixed;bottom:5rem;left:1rem;z-index:30;display:none;
+    background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.2);
+    color:#fff;font-family:'Outfit',sans-serif;font-size:0.78rem;font-weight:500;
+    padding:0.55rem 1rem;border-radius:6px;cursor:pointer;
+    align-items:center;gap:0.45rem;backdrop-filter:blur(8px);">
+  <svg id="fullscreenIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+    <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+    <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+  </svg>
+  Fullscreen
+</button>
+
+<button id="muteBtn" onclick="toggleMute()"
+  style="position:fixed;bottom:5rem;right:1rem;z-index:30;display:none;
+    background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.2);
+    color:#fff;font-family:'Outfit',sans-serif;font-size:0.78rem;font-weight:500;
+    padding:0.55rem 1rem;border-radius:6px;cursor:pointer;
+    align-items:center;gap:0.45rem;backdrop-filter:blur(8px);">
+  🔇 Unmute
+</button>
+
+<button id="viewerReplayBtn" onclick="viewerTriggerReplay()"
+  style="position:fixed;bottom:5rem;left:50%;transform:translateX(-50%);z-index:30;display:none;
+    background:rgba(0,200,255,0.12);border:1px solid rgba(0,200,255,0.35);
+    color:#00c8ff;font-family:'Space Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;
+    padding:0.5rem 1rem;border-radius:6px;cursor:pointer;
+    align-items:center;gap:0.4rem;backdrop-filter:blur(8px);"
+  title="Replay last 20 seconds on your device">
+  ⏪ INSTANT REPLAY
+</button>
+
+<!-- Flag Modal -->
+<div id="flagModal">
+  <div class="flag-card">
+    <span class="flag-icon">🚩</span>
+    <div class="flag-title">Report this stream?</div>
+    <p class="flag-desc">Flag this broadcast for inappropriate content. One report will immediately end the stream and the host will be permanently banned from SquashLive.</p>
+    <div id="flagSuccess" class="flag-success">
+      ✓ Reported. Thank you for keeping SquashLive safe.
+    </div>
+    <div class="flag-actions" id="flagActions">
+      <button class="flag-cancel" onclick="closeFlag()">Cancel</button>
+      <button class="flag-confirm" id="flagConfirmBtn" onclick="submitFlag()">Report Stream</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Co-host Banner -->
+<!-- Banned Banner -->
+<div id="bannedBanner">
+  <div class="banned-icon">⛔</div>
+  <div class="banned-title">Stream Removed</div>
+  <p class="banned-sub">This stream was taken down for violating community guidelines.</p>
+  <a href="index.html" class="banned-home">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15,18 9,12 15,6"/></svg>
+    Back to Live Matches
+  </a>
+</div>
+
+<div id="status">
+  <a href="index.html" class="status-logo" style="text-decoration:none;color:inherit">Squash<span>Live</span></a>
+  <div class="spinner" id="spinner"></div>
+  <div id="statusTitle">Connecting…</div>
+  <p id="statusMsg">Finding the stream</p>
+  <div id="codeEntry">
+    <input class="code-input" id="codeInput" type="text" placeholder="Paste room code  e.g. SQLV-…" maxlength="50"/>
+    <button class="code-btn" onclick="joinCode()">Watch →</button>
+    <a href="index.html" class="code-back">← Back to Live Matches</a>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const roomId = (params.get('room')||'').toUpperCase().trim();
+
+let hasFlagged = false;
+let currentStream = null;
+let lastScoreMsg = null;       // last score message, forwarded to co-hosted viewers
+let relayActive = false;       // true once we start auto-relaying
+let cohostRelayConns = [];     // data connections from viewers we're relaying to
+let cohostRelayPeers = new Set();
+let _streamEndTimer = null;    // grace period before showing "Stream Ended"
+
+// Automatically relay our stream to any viewer who connects to us via PeerJS.
+// Called as soon as we have a stream. No user interaction required.
+function startRelaying(){
+  if(relayActive) return;
+  relayActive = true;
+  const p = window._viewerPeer;
+  if(!p) return;
+  p.on('connection', conn => {
+    if(cohostRelayPeers.has(conn.peer)) return;
+    cohostRelayPeers.add(conn.peer);
+    cohostRelayConns.push(conn);
+    conn.on('open', ()=>{
+      if(window._lastScoreMsg) try{ conn.send(window._lastScoreMsg); }catch(e){}
+      const doRelay = (attempts=0)=>{
+        if(!cohostRelayPeers.has(conn.peer)) return; // viewer left, stop retrying
+        if(currentStream && p){
+          const rc = p.call(conn.peer, currentStream);
+          rc.on('close', ()=>{ cohostRelayPeers.delete(conn.peer); cohostRelayConns=cohostRelayConns.filter(c=>c!==conn); });
+          rc.on('error', ()=>{ cohostRelayPeers.delete(conn.peer); cohostRelayConns=cohostRelayConns.filter(c=>c!==conn); });
+        } else if(attempts < 25){
+          setTimeout(()=>doRelay(attempts+1), 200); // max 5s of retries
+        } else { console.warn('doRelay: stream never arrived for', conn.peer); }
+      };
+      doRelay();
+    });
+    conn.on('close', ()=>{ cohostRelayPeers.delete(conn.peer); cohostRelayConns=cohostRelayConns.filter(c=>c!==conn); });
+  });
+}
+
+if(!roomId){
+  document.getElementById('statusTitle').textContent = 'Enter Room Code';
+  document.getElementById('statusMsg').textContent = 'Ask the broadcaster for their room code.';
+  document.getElementById('spinner').style.display='none';
+  document.getElementById('codeEntry').style.display='flex';
+} else {
+  // connect() is triggered after consent is accepted (see acceptConsent below)
+}
+
+function joinCode(){
+  const code = document.getElementById('codeInput').value.trim().toUpperCase();
+  if(!code) return;
+  window.location.href = 'watch.html?room=' + encodeURIComponent(code);
+}
+document.addEventListener('keydown', e=>{
+  if(e.key==='Enter') joinCode();
+});
+
+function acceptConsent(){
+  sessionStorage.setItem('squashlive_consent', '1');
+  document.getElementById('consentModal').style.display = 'none';
+  // User gesture just happened — safe to autoplay ad video now
+  if(roomId) loadAndPlayAd(() => connect());
+}
+
+(function(){
+  if(sessionStorage.getItem('squashlive_consent') === '1' && roomId){
+    document.getElementById('consentModal').style.display = 'none';
+    // Already consented this session — but we still need a click to autoplay
+    // Show a "tap to watch" overlay instead
+    const tap = document.createElement('div');
+    tap.id = 'tapToWatch';
+    tap.style.cssText = 'position:fixed;inset:0;z-index:9997;background:rgba(7,9,12,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(4px)';
+    tap.innerHTML = `<div style="text-align:center">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:0.05em;color:#f0f0f0">Tap to Watch</div>
+      <div style="font-size:0.82rem;color:#6b7280;margin-top:0.5rem">Stream will start immediately</div>
+    </div>`;
+    tap.onclick = () => { tap.remove(); loadAndPlayAd(() => connect()); };
+    document.body.appendChild(tap);
+  }
+})();
+
+// ─── AD PLAYER ───────────────────────────────────────────────────────────────
+let _adIndex = 0;
+let _adList = [];
+let _adProgressInterval = null;
+let _adPartialTracked = false;
+
+async function loadAndPlayAd(onComplete) {
+  // Fetch ads and start connecting to stream IN PARALLEL
+  // Stream will be ready by the time the ad finishes
+  const [adsResult] = await Promise.allSettled([
+    fetch('/api/media?type=ads', { cache: 'no-store' }).then(r => r.json()).catch(() => [])
+  ]);
+  _adList = adsResult.value || [];
+
+  // Start stream connection in background immediately
+  onComplete(); // this calls connect() which runs in background
+  if (!_adList.length) return; // no ads — stream just connects normally
+
+  // Show ad over the top while stream connects behind it
+  const ad = _adList[_adIndex % _adList.length];
+  _adIndex++;
+  _adPartialTracked = false;
+
+  const player = document.getElementById('adPlayer');
+  const vid = document.getElementById('adVideo');
+  const bar = document.getElementById('adProgressBar');
+  const countdown = document.getElementById('adCountdown');
+
+  player.style.display = 'flex';
+  // Ensure status overlay is hidden behind ad
+  document.getElementById('status').style.zIndex = '1';
+
+  vid.muted = false;
+  vid.src = ad.file_url;
+  vid.preload = 'auto';
+
+  let dur = 20;
+  let playStarted = false;
+
+  function startProgress() {
+    clearInterval(_adProgressInterval);
+    _adProgressInterval = setInterval(() => {
+      if (vid.paused || vid.ended) return;
+      const pct = (vid.currentTime / dur) * 100;
+      bar.style.width = pct + '%';
+      const remaining = Math.max(0, Math.ceil(dur - vid.currentTime));
+      countdown.textContent = remaining + 's';
+    }, 100);
+  }
+
+  function tryPlay() {
+    if (playStarted) return;
+    if (vid.duration) dur = vid.duration;
+    countdown.textContent = Math.ceil(dur) + 's';
+    const p = vid.play();
+    if (p && p.catch) p.catch(() => {});
+    playStarted = true;
+    startProgress();
+  }
+
+  // Track partial only when viewer leaves BEFORE the ad ends
+  // (not on a timer — that fires during full plays too)
+  function trackPartialIfAbandoned() {
+    if (!_adPartialTracked && playStarted && !vid.ended && vid.currentTime > 1) {
+      _adPartialTracked = true;
+      navigator.sendBeacon('/api/media?type=ad-play',
+        JSON.stringify({ id: ad.id, full: false }));
+    }
+  }
+  window.addEventListener('beforeunload', trackPartialIfAbandoned, { once: true });
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden) trackPartialIfAbandoned();
+  }, { once: true });
+
+  // Multiple events to ensure play starts on all browsers/devices
+  vid.onloadedmetadata = tryPlay;
+  vid.oncanplay = tryPlay;
+  vid.oncanplaythrough = tryPlay;
+  // Update duration exactly as soon as browser knows it
+  vid.addEventListener('durationchange', () => {
+    if(vid.duration && isFinite(vid.duration)){
+      dur = vid.duration;
+      countdown.textContent = Math.ceil(dur) + 's';
+    }
+  });
+  setTimeout(tryPlay, 300);
+
+  vid.onended = () => {
+    clearInterval(_adProgressInterval);
+    _adPartialTracked = true;
+    bar.style.width = '100%';
+    fetch('/api/media?type=ad-play', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: ad.id, full: true }) }).catch(() => {});
+    setTimeout(() => {
+      player.style.display = 'none';
+      vid.src = '';
+      document.getElementById('status').style.zIndex = '';
+      // Show fullscreen button now that ad is done
+      if(document.getElementById('scoreBox').style.display !== 'none'){
+        document.getElementById('fullscreenBtn').style.display = 'flex';
+      }
+    }, 300);
+  };
+
+  vid.onerror = () => {
+    clearInterval(_adProgressInterval);
+    player.style.display = 'none';
+    document.getElementById('status').style.zIndex = '';
+  };
+}
+
+async function connect(){
+  setStatus('Connecting…','Finding the stream');
+
+  // Always connect directly to broadcaster — co-hosts are managed in background
+  let targetPeerId = roomId;
+
+  const peer = new Peer({
+    config:{iceServers:[
+      {urls:'stun:stun.l.google.com:19302'},
+      {urls:'stun:stun1.l.google.com:19302'}
+    ]}
+  });
+  window._viewerPeer = peer; // expose for cohost relay
+
+  peer.on('open', id=>{
+    setStatus('Connected','Waiting for broadcaster…');
+
+    const dc = peer.connect(targetPeerId, {reliable:true});
+    window._viewerDc = dc; // store for cohost accept/decline messages
+    dc.on('open',()=>{
+      setStatus('Data connected','Waiting for video…');
+    });
+    dc.on('data', d=>{
+      if(d.type==='init'||d.type==='update'){
+        showScore(d.score);
+        lastScoreMsg = d;
+        window._lastScoreMsg = d;
+        cohostRelayConns.forEach(c=>{ try{ if(c.open) c.send(d); }catch(e){} });
+      }
+      if(d.type==='banned') showBanned();
+      // Forward relay messages down to our children
+      const RELAY_FORWARD = ['init','update','banned','direct-upgrade','cohost-redirect','cohost-dropped','game_won','game_ready','intermission'];
+      if(RELAY_FORWARD.includes(d.type)){
+        cohostRelayConns.forEach(c=>{ try{ if(c.open) c.send(d); }catch(e){} });
+      }
+
+      if(d.type==='game_won') showViewerGameWonOverlay(d);
+      if(d.type==='game_ready') closeViewerGameWonOverlay();
+      if(d.type==='intermission') showViewerIntermission(d);
+      if(d.type==='direct-upgrade'){
+        if(_streamEndTimer){ clearTimeout(_streamEndTimer); _streamEndTimer = null; }
+        callDone = false;
+        setStatus('Upgrading…','Switching to direct connection');
+      }
+      // ── REPLAY MESSAGES ──────────────────────────────────────────────────
+      // Each viewer controls their own local replay via viewerTriggerReplay()
+      if(d.type==='cohost-redirect' && d.peerId){
+        if(_streamEndTimer){ clearTimeout(_streamEndTimer); _streamEndTimer = null; }
+        callDone = false; // reset so we accept the new co-host's video call
+        console.log('Redirected to co-host:', d.peerId);
+        setStatus('Connecting…','Connecting via co-host');
+        // Open a data channel to the co-host — it will see the incoming connection
+        // and call us back with the relayed video stream.
+        const cohostDc = peer.connect(d.peerId, {reliable:true});
+        cohostDc.on('open', ()=>{
+          console.log('Data channel to co-host open, awaiting video call from', d.peerId);
+        });
+        cohostDc.on('error', e=>{ console.warn('Co-host data channel error:', e); });
+      }
+      if(d.type==='cohost-dropped'){
+        // Cancel pending "Stream Ended" — broadcaster is calling us directly now
+        if(_streamEndTimer){ clearTimeout(_streamEndTimer); _streamEndTimer = null; }
+        callDone = false; // reset so we accept the broadcaster's incoming call
+        console.log('Co-host dropped, broadcaster reconnecting us directly');
+        setStatus('Reconnecting…','Switching to direct connection');
+      }
+
+      // Reply to RTT ping immediately
+      if(d.type==='ping'){
+        try{ dc.send({type:'pong', ts: d.ts}); }catch(e){}
+      }
+    });
+    dc.on('error', e=>{ setStatus('Error','Data channel failed'); });
+
+    // If data channel drops, attempt to reconnect it — score and relay messages depend on it
+    dc.on('close', ()=>{
+      console.warn('Data channel to broadcaster closed — attempting reconnect');
+      setTimeout(()=>{
+        if(peer.destroyed) return;
+        try{
+          const newDc = peer.connect(targetPeerId, {reliable:true});
+          window._viewerDc = newDc;
+          newDc.on('open', ()=> console.log('Data channel reconnected'));
+          newDc.on('error', ()=>{});
+          newDc.on('close', ()=>{});
+        }catch(e){ console.warn('Data channel reconnect failed:', e); }
+      }, 1000);
+    });
+  });
+
+  let callDone = false;
+  peer.on('call', call=>{
+    if(callDone){ call.close(); return; }
+    callDone = true;
+
+    let streamAttached = false;
+
+    function attachStream(stream){
+      if(streamAttached) return;
+      if(!stream || (!stream.getVideoTracks().length && !stream.getAudioTracks().length)) return;
+      streamAttached = true;
+      currentStream = stream;
+      startRelaying(); // ensure relay starts even if call.on('stream') fired first
+
+      const vid = document.getElementById('vid');
+      vid.muted = true;
+      vid.srcObject = stream;
+
+      function showLiveUI(){
+        document.getElementById('status').style.display='none';
+        document.getElementById('scoreBox').style.display='block';
+        document.getElementById('flagBtn').style.display='flex';
+        document.getElementById('recBtn').style.display='flex';
+        document.getElementById('muteBtn').style.display='flex';
+        // Start viewer's own local replay buffer once stream is live
+        viewerStartRollingBuffer(stream);
+        const rb = document.getElementById('viewerReplayBtn');
+        const rbFS = document.getElementById('viewerReplayBtnFS');
+        // Show replay button after buffer has had time to fill (20s)
+        setTimeout(()=>{
+          if(rb) rb.style.display='flex';
+          if(rbFS) rbFS.style.display='flex';
+        }, 20000);
+        // fullscreenBtn shown after ad completes (hidden during ad)
+        // if no ad was playing, show it immediately
+        if(document.getElementById('adPlayer').style.display === 'none'){
+          document.getElementById('fullscreenBtn').style.display='flex';
+        }
+      }
+
+      function doPlay(){
+        vid.play().then(showLiveUI).catch(()=>{
+          document.getElementById('statusTitle').textContent = 'Tap to Watch';
+          document.getElementById('statusMsg').textContent = 'Tap anywhere to start the stream';
+          document.getElementById('spinner').style.display='none';
+          document.getElementById('status').onclick = ()=>{
+            vid.play().then(showLiveUI).catch(console.error);
+          };
+        });
+      }
+
+      if(vid.readyState >= 3){ doPlay(); }
+      else {
+        vid.oncanplay = ()=>{ vid.oncanplay=null; doPlay(); };
+        setTimeout(()=>{ if(!vid.played.length){ vid.oncanplay=null; doPlay(); } }, 3000);
+      }
+    }
+
+    // Hook peerConnection.ontrack BEFORE answering so no tracks are missed.
+    // call.on('open') does NOT exist on media connections — must do this immediately.
+    const pc = call.peerConnection;
+    if(pc){
+      const fallbackStream = new MediaStream();
+      pc.ontrack = (evt)=>{
+        // prefer evt.streams[0] (has both tracks bound together)
+        if(evt.streams && evt.streams[0]){
+          attachStream(evt.streams[0]);
+        } else {
+          fallbackStream.addTrack(evt.track);
+          attachStream(fallbackStream);
+        }
+      };
+    }
+
+    // Answer with no stream — passing new MediaStream() breaks SDP on many browsers
+    call.answer();
+
+    // PeerJS high-level event (fires in addition to / instead of ontrack on some browsers)
+    call.on('stream', stream => {
+      attachStream(stream);
+      startRelaying(); // auto-relay to any viewers assigned to us in the tree
+    });
+
+    call.on('close',()=>{
+      // Reset so we can accept a new call from a replacement co-host or broadcaster.
+      callDone = false;
+      document.getElementById('flagBtn').style.display='none';
+      document.getElementById('recBtn').style.display='none';
+      document.getElementById('muteBtn').style.display='none';
+      document.getElementById('viewerReplayBtn').style.display='none';
+      const rbFS = document.getElementById('viewerReplayBtnFS');
+      if(rbFS) rbFS.style.display='none';
+      viewerStopRollingBuffer();
+      if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      // Actively ask the broadcaster to re-route us — don't just wait passively.
+      // The broadcaster may already be sending cohost-redirect, but this is a safety net
+      // in case the tree reparent message didn't arrive in time.
+      try{ window._viewerDc && window._viewerDc.open && window._viewerDc.send({type:'reconnect-request'}); }catch(e){}
+      setStatus('Reconnecting…','Finding another stream source…');
+      // Give 10s for cohost-redirect or cohost-dropped to arrive before giving up
+      _streamEndTimer = setTimeout(()=>{
+        _streamEndTimer = null;
+        setStatus('Stream Ended','The broadcaster has finished. Returning to dashboard...');
+        document.getElementById('scoreBox').style.display='none';
+        setTimeout(() => { window.location.href = 'index.html'; }, 3000);
+      }, 10000);
+    });
+    call.on('error', e=>{ setStatus('Error', e.message||'Call failed'); });
+  });
+
+  peer.on('error', err=>{
+    if(err.type==='peer-unavailable')
+      setStatus('Stream Not Found','This broadcaster may be offline. Try refreshing.');
+    else
+      setStatus('Connection Error', err.type);
+  });
+
+  // Reconnect to PeerJS signalling server on network blips
+  peer.on('disconnected', ()=>{
+    console.warn('PeerJS signalling disconnected — reconnecting…');
+    if(!peer.destroyed) peer.reconnect();
+  });
+
+  setTimeout(()=>{
+    if(document.getElementById('status').style.display!=='none'){
+      setStatus('Taking longer than expected…','The broadcaster may be starting up. Try refreshing.');
+    }
+  }, 20000);
+}
+
+function setStatus(title, msg){
+  document.getElementById('statusTitle').textContent = title;
+  document.getElementById('statusMsg').textContent = msg;
+  document.getElementById('status').style.display = 'flex';
+  document.getElementById('status').onclick = null;
+}
+
+function showScore(s){
+  if(!s) return;
+  document.getElementById('gameInfo').textContent = 'GAME ' + s.game + ' · BEST OF ' + s.bestOf;
+  document.getElementById('p1pts').textContent = s.p1.pts;
+  document.getElementById('p2pts').textContent = s.p2.pts;
+  const p1g = s.p1.games; const p2g = s.p2.games;
+  document.getElementById('p1games').textContent = p1g > 0 ? '(' + p1g + ')' : '';
+  document.getElementById('p2games').textContent = p2g > 0 ? '(' + p2g + ')' : '';
+  const p1n = (s.p1name||'P1').toUpperCase();
+  const p2n = (s.p2name||'P2').toUpperCase();
+  document.getElementById('p1name').textContent = p1n;
+  document.getElementById('p2name').textContent = p2n;
+
+  // Game history chips
+  if(s.gameHistory && s.gameHistory.length){
+    const strip = document.getElementById('gameHistoryStrip');
+    const chips = document.getElementById('gameHistoryChips');
+    strip.style.display = 'flex';
+    chips.innerHTML = s.gameHistory.map(h=>{
+      const winnerName = h.winner===1 ? p1n : p2n;
+      const p1c = h.winner===1 ? '#ff4d00' : '#6b7280';
+      const p2c = h.winner===2 ? '#00c8ff' : '#6b7280';
+      return `<span style="font-family:'Space Mono',monospace;font-size:0.58rem;letter-spacing:0.04em;
+        background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);
+        border-radius:4px;padding:0.2rem 0.5rem;white-space:nowrap;flex-shrink:0">
+        <span style="color:#6b7280;font-size:0.48rem">G${h.game} </span><span style="color:${p1c}">${h.p1pts}</span><span style="color:#444">–</span><span style="color:${p2c}">${h.p2pts}</span>
+      </span>`;
+    }).join('');
+  }
+}
+
+// ─── RECORDING ────────────────────────────────────────────────────────────────
+let mediaRecorder = null, recChunks = [], recTimerInterval = null, recSeconds = 0, recIndex = 0;
+
+function toggleRecord(){
+  if(!currentStream){ return; }
+  if(mediaRecorder && mediaRecorder.state === 'recording'){
+    stopRecord();
+  } else {
+    startRecord();
+  }
+}
+
+function startRecord(){
+  recChunks = [];
+
+  // Canvas composite recording — video frames with score burned in.
+  // Use plain 'video/webm' (no codec spec) for canvas stream to avoid
+  // codec mismatch that caused unplayable files. Audio added via Web Audio API.
+  const vid = document.getElementById('vid');
+  const canvas = document.createElement('canvas');
+  canvas.width  = vid.videoWidth  || 1280;
+  canvas.height = vid.videoHeight || 720;
+  const ctx = canvas.getContext('2d');
+
+  let _recAnimFrame;
+  function drawFrame(){
+    if(vid.readyState >= 2) ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+
+    // Score bar at bottom
+    const bh = Math.round(canvas.height * 0.08);
+    const y  = canvas.height - bh;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, y, canvas.width, bh);
+
+    // Read from lastScoreMsg for accuracy — DOM IDs are lowercase (p1pts not p1Pts)
+    const _sc = lastScoreMsg?.score || {};
+    const p1n = (_sc.p1name || document.getElementById('p1name')?.textContent || 'P1').toUpperCase();
+    const p2n = (_sc.p2name || document.getElementById('p2name')?.textContent || 'P2').toUpperCase();
+    const p1p = String(_sc.p1?.pts  ?? document.getElementById('p1pts')?.textContent  ?? '0');
+    const p2p = String(_sc.p2?.pts  ?? document.getElementById('p2pts')?.textContent  ?? '0');
+    const p1gn = _sc.p1?.games ?? 0;
+    const p2gn = _sc.p2?.games ?? 0;
+    const p1g = p1gn > 0 ? `(${p1gn})` : '';
+    const p2g = p2gn > 0 ? `(${p2gn})` : '';
+    // Layout: |  P1 NAME (games)  |  pts – pts  |  P2 NAME (games)  |
+    const fs   = Math.round(bh * 0.36);
+    const mid  = canvas.width / 2;
+    const pad  = Math.round(canvas.width * 0.02);
+    ctx.textBaseline = 'middle';
+    const cy = y + bh * 0.5; // vertical centre of bar
+
+    // Player 1 name — left-aligned from left edge
+    ctx.textAlign = 'left';
+    ctx.font = `700 ${fs}px sans-serif`;
+    ctx.fillStyle = '#ff4d00';
+    ctx.fillText(p1n, pad, cy - bh * 0.12);
+    if(p1g){
+      ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`;
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(p1g, pad, cy + bh * 0.3);
+    }
+
+    // Player 2 name — right-aligned from right edge
+    ctx.textAlign = 'right';
+    ctx.font = `700 ${fs}px sans-serif`;
+    ctx.fillStyle = '#00c8ff';
+    ctx.fillText(p2n, canvas.width - pad, cy - bh * 0.12);
+    if(p2g){
+      ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`;
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(p2g, canvas.width - pad, cy + bh * 0.3);
+    }
+
+    // Score digits — centred
+    ctx.textAlign = 'center';
+    ctx.font = `700 ${Math.round(fs * 1.3)}px monospace`;
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`${p1p}  –  ${p2p}`, mid, cy);
+
+    _recAnimFrame = requestAnimationFrame(drawFrame);
+  }
+  drawFrame();
+
+  // Build combined stream: canvas video + original audio
+  const captureOk = typeof canvas.captureStream === 'function' || typeof canvas.mozCaptureStream === 'function';
+  const canvasCapture = (canvas.captureStream || canvas.mozCaptureStream)?.bind(canvas);
+
+  // On iOS Safari captureStream is unsupported — fall back to raw stream recording
+  if(!captureOk){
+    cancelAnimationFrame(_recAnimFrame);
+    const fallbackMime = getSupportedMime();
+    try{ mediaRecorder = new MediaRecorder(currentStream, fallbackMime ? {mimeType: fallbackMime} : {}); }
+    catch(e){ alert('Recording not supported: '+e.message); return; }
+    mediaRecorder._cleanup = ()=>{};
+    mediaRecorder.ondataavailable = e => { if(e.data?.size > 0) recChunks.push(e.data); };
+    mediaRecorder.onstop = () => { mediaRecorder._cleanup?.(); saveRecording(fallbackMime); };
+    mediaRecorder.start(1000);
+    const btn = document.getElementById('recBtn');
+    btn.classList.add('recording');
+    document.getElementById('recBtnLabel').textContent = 'Stop';
+    document.getElementById('recTimer').style.display = 'inline';
+    recSeconds = 0; updateRecTimer();
+    recTimerInterval = setInterval(()=>{ recSeconds++; updateRecTimer(); }, 1000);
+    return;
+  }
+
+  const canvasStream = canvasCapture(25);
+  const combinedStream = new MediaStream();
+  canvasStream.getVideoTracks().forEach(t => combinedStream.addTrack(t));
+  (currentStream?.getAudioTracks() || []).forEach(t => combinedStream.addTrack(t));
+
+  // Use video/webm without codec specification — browser picks compatible codec
+  const mimeType = MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '';
+
+  try {
+    mediaRecorder = new MediaRecorder(combinedStream, mimeType ? {mimeType} : {});
+  } catch(e){
+    cancelAnimationFrame(_recAnimFrame);
+    // Fallback: record raw stream if canvas recording fails
+    try{ mediaRecorder = new MediaRecorder(currentStream); }
+    catch(e2){ alert('Recording not supported: ' + e2.message); return; }
+  }
+  mediaRecorder._cleanup = ()=> cancelAnimationFrame(_recAnimFrame);
+  mediaRecorder.ondataavailable = e => { if(e.data && e.data.size > 0) recChunks.push(e.data); };
+  mediaRecorder.onstop = () => { mediaRecorder._cleanup?.(); saveRecording(mimeType || ''); };
+  mediaRecorder.start(1000);
+
+  const btn = document.getElementById('recBtn');
+  btn.classList.add('recording');
+  document.getElementById('recBtnLabel').textContent = 'Stop';
+  document.getElementById('recTimer').style.display = 'inline';
+  recSeconds = 0;
+  updateRecTimer();
+  recTimerInterval = setInterval(()=>{ recSeconds++; updateRecTimer(); }, 1000);
+}
+
+function stopRecord(){
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  mediaRecorder?._cleanup?.();
+  clearInterval(recTimerInterval);
+  const btn = document.getElementById('recBtn');
+  btn.classList.remove('recording');
+  document.getElementById('recBtnLabel').textContent = 'REC';
+  document.getElementById('recTimer').style.display = 'none';
+}
+
+async function saveRecording(mimeType){
+  const ext = mimeType && mimeType.includes('mp4') ? 'mp4' : 'webm';
+  let blob = new Blob(recChunks, {type: mimeType || 'video/webm'});
+  blob = await fixRecordingDuration(blob, recSeconds * 1000);
+  const url = URL.createObjectURL(blob);
+  recIndex++;
+  const dur = formatRecTime(recSeconds);
+  const name = `squashlive-viewer-${recIndex}-${dur.replace(':','-')}.${ext}`;
+
+  // Auto-download
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 5000);
+
+  // Show YouTube upload prompt (same as broadcaster)
+  document.getElementById('ytPromptFilename').textContent = name;
+  document.getElementById('ytPrompt').style.display = 'flex';
+}
+
+// ─── YOUTUBE HIGHLIGHT PROMPT ─────────────────────────────────────────────────
+(function(){
+  const modal = document.createElement('div');
+  modal.id = 'ytPrompt';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9000;background:rgba(7,9,12,0.92);align-items:center;justify-content:center;padding:1.5rem;backdrop-filter:blur(8px)';
+  modal.innerHTML = `
+    <div style="max-width:420px;width:100%;background:#0f1318;border:1px solid rgba(255,255,255,0.08);border-radius:14px;overflow:hidden">
+      <div style="height:2px;background:linear-gradient(to right,transparent,#ff4d00,transparent)"></div>
+      <div style="padding:1.75rem;display:flex;flex-direction:column;gap:1rem">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:0.03em">
+          Submit a Highlight?
+        </div>
+        <div style="font-size:0.82rem;color:#c0c0c0;line-height:1.6">
+          Your clip <strong id="ytPromptFilename" style="color:#f0f0f0"></strong> has been saved.<br>
+          Upload it to YouTube, then paste the link below to submit it as a highlight.
+        </div>
+        <a href="https://studio.youtube.com/channel/UC/videos/upload" target="_blank"
+          style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.7rem;
+          background:#ff0000;color:#fff;text-decoration:none;border-radius:7px;
+          font-family:'Outfit',sans-serif;font-weight:700;font-size:0.85rem">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3 3 0 0 0-2.12-2.12C19.54 3.5 12 3.5 12 3.5s-7.54 0-9.38.57A3 3 0 0 0 .5 6.19C0 8.03 0 12 0 12s0 3.97.5 5.81a3 3 0 0 0 2.12 2.12C4.46 20.5 12 20.5 12 20.5s7.54 0 9.38-.57a3 3 0 0 0 2.12-2.12C24 15.97 24 12 24 12s0-3.97-.5-5.81zM9.75 15.5v-7l6.5 3.5-6.5 3.5z"/></svg>
+          Upload to YouTube
+        </a>
+        <div style="display:flex;flex-direction:column;gap:0.5rem">
+          <input id="ytNameInput" type="text" placeholder="Your name (optional)"
+            style="background:#161c24;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+            font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+            border-radius:7px;outline:none;width:100%"/>
+          <input id="ytTitleInput" placeholder="Highlight title e.g. Stunning backhand rally"
+            style="background:#161c24;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+            font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+            border-radius:7px;outline:none;width:100%"/>
+          <input id="ytUrlInput" placeholder="Paste YouTube link here"
+            style="background:#161c24;border:1px solid rgba(255,255,255,0.08);color:#f0f0f0;
+            font-family:'Outfit',sans-serif;font-size:0.85rem;padding:0.7rem 0.9rem;
+            border-radius:7px;outline:none;width:100%"/>
+        </div>
+        <div id="ytPromptStatus" style="font-size:0.78rem;color:#6b7280;min-height:1rem"></div>
+        <div style="display:flex;gap:0.65rem">
+          <button id="ytSubmitBtn" onclick="submitHighlight()"
+            style="flex:1;padding:0.75rem;background:#ff4d00;color:#fff;border:none;border-radius:7px;
+            font-family:'Outfit',sans-serif;font-weight:700;font-size:0.88rem;cursor:pointer">
+            Submit Highlight
+          </button>
+          <button onclick="document.getElementById('ytPrompt').style.display='none'"
+            style="padding:0.75rem 1rem;background:transparent;border:1px solid rgba(255,255,255,0.1);
+            color:#6b7280;border-radius:7px;font-family:'Outfit',sans-serif;font-size:0.85rem;cursor:pointer">
+            Skip
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+})();
+
+async function submitHighlight(){
+  const name = document.getElementById('ytNameInput').value.trim();
+  const title = document.getElementById('ytTitleInput').value.trim();
+  const url = document.getElementById('ytUrlInput').value.trim();
+  const statusEl = document.getElementById('ytPromptStatus');
+  const btn = document.getElementById('ytSubmitBtn');
+
+  statusEl.style.color = '#6b7280';
+  if(!title){ statusEl.textContent = 'Please add a title.'; return; }
+  if(!url){ statusEl.textContent = 'Please paste a YouTube URL.'; return; }
+  if(!url.includes('youtube') && !url.includes('youtu.be')){ statusEl.textContent = 'Please paste a valid YouTube URL.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Submitting...';
+
+  try {
+    const r = await fetch('/api/highlights', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtube_url: url, title, match_desc: '', broadcaster_email: name || 'Anonymous' })
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Submission failed');
+    statusEl.style.color = '#00c8ff';
+    statusEl.textContent = 'Submitted! We will review it shortly.';
+    btn.style.display = 'none';
+    setTimeout(()=>{ document.getElementById('ytPrompt').style.display = 'none'; }, 3000);
+  } catch(e) {
+    statusEl.style.color = '#ff4d6d';
+    statusEl.textContent = e.message;
+    btn.disabled = false; btn.textContent = 'Submit Highlight';
+  }
+}
+
+
+function getSupportedMime(){
+  const types = [
+    'video/mp4;codecs=avc1,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm'
+  ];
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+
+async function fixMp4Duration(blob, durationMs){
+  if(!durationMs || durationMs <= 0) return blob;
+  const buf = await blob.arrayBuffer();
+  const arr = new Uint8Array(buf);
+  const dv  = new DataView(buf);
+  let mvTs  = 1000;
+
+  function fcc(o){ return String.fromCharCode(arr[o],arr[o+1],arr[o+2],arr[o+3]); }
+  function walk(start, end){
+    let i = start;
+    while(i + 8 <= end){
+      const sz = dv.getUint32(i, false);
+      if(sz < 8) break;
+      const type = fcc(i + 4);
+      if(type === 'mvhd'){
+        const v = arr[i+8];
+        if(v === 0){ mvTs=dv.getUint32(i+20,false); dv.setUint32(i+24, Math.round(durationMs*mvTs/1000)>>>0, false); }
+        else       { mvTs=dv.getUint32(i+28,false); dv.setUint32(i+32,0,false); dv.setUint32(i+36, Math.round(durationMs*mvTs/1000)>>>0, false); }
+      } else if(type === 'tkhd'){
+        const v = arr[i+8]; const t = Math.round(durationMs*mvTs/1000)>>>0;
+        if(v === 0) dv.setUint32(i+28, t, false);
+        else { dv.setUint32(i+36,0,false); dv.setUint32(i+40,t,false); }
+      } else if(type === 'mdhd'){
+        const v = arr[i+8];
+        if(v === 0){ const ts=dv.getUint32(i+20,false); dv.setUint32(i+24, Math.round(durationMs*ts/1000)>>>0, false); }
+        else       { const ts=dv.getUint32(i+28,false); dv.setUint32(i+32,0,false); dv.setUint32(i+36, Math.round(durationMs*ts/1000)>>>0, false); }
+      }
+      if('moov trak mdia minf stbl edts'.includes(type)) walk(i+8, i+sz);
+      i += sz;
+    }
+  }
+  walk(0, arr.length);
+  return new Blob([buf], {type: blob.type});
+}
+
+async function fixRecordingDuration(blob, durationMs){
+  if(!blob || !durationMs || durationMs <= 0) return blob;
+  if(blob.type.includes('mp4'))  return fixMp4Duration(blob, durationMs);
+  if(blob.type.includes('webm')) return fixWebmDuration(blob, durationMs);
+  return blob;
+}
+
+async function fixWebmDuration(blob, durationMs){
+  if(!durationMs || durationMs <= 0) return blob;
+  const buf = await blob.arrayBuffer();
+  const arr = new Uint8Array(buf);
+
+  function readVint(pos){
+    const b = arr[pos];
+    if(b & 0x80) return {v: b & 0x7F,                                                len: 1};
+    if(b & 0x40) return {v: ((b&0x3F)<<8)|arr[pos+1],                                len: 2};
+    if(b & 0x20) return {v: ((b&0x1F)<<16)|(arr[pos+1]<<8)|arr[pos+2],               len: 3};
+    return       {v: ((b&0x0F)<<24)|(arr[pos+1]<<16)|(arr[pos+2]<<8)|arr[pos+3],     len: 4};
+  }
+  function encVint(v){
+    if(v < 127)     return new Uint8Array([0x80|v]);
+    if(v < 16383)   return new Uint8Array([0x40|(v>>8),   v&0xFF]);
+    if(v < 2097151) return new Uint8Array([0x20|(v>>16),  (v>>8)&0xFF,  v&0xFF]);
+    return                  new Uint8Array([0x10|(v>>>24), (v>>16)&0xFF, (v>>8)&0xFF, v&0xFF]);
+  }
+
+  // Step 1 — patch existing Duration element (EBML ID 0x4489)
+  for(let i = 0; i < arr.length - 10; i++){
+    if(arr[i] !== 0x44 || arr[i+1] !== 0x89) continue;
+    const dv = new DataView(buf);
+    if(arr[i+2] === 0x88){ dv.setFloat64(i+3, durationMs, false); return new Blob([buf],{type:blob.type}); }
+    if(arr[i+2] === 0x84){ dv.setFloat32(i+3, durationMs, false); return new Blob([buf],{type:blob.type}); }
+  }
+
+  // Step 2 — insert Duration into Info element (EBML ID 0x1549A966)
+  for(let i = 0; i < arr.length - 20; i++){
+    if(arr[i]!==0x15||arr[i+1]!==0x49||arr[i+2]!==0xA9||arr[i+3]!==0x66) continue;
+    const sz = readVint(i + 4);
+    if(sz.v <= 0) continue;
+    const newSzEnc = encVint(sz.v + 11);
+    if(newSzEnc.length !== sz.len) continue;
+
+    const insertAt = i + 4 + sz.len;
+    const durEl = new Uint8Array(11);
+    durEl[0]=0x44; durEl[1]=0x89; durEl[2]=0x88;
+    new DataView(durEl.buffer).setFloat64(3, durationMs, false);
+
+    const out = new Uint8Array(arr.length + 11);
+    out.set(arr.subarray(0, i + 4));
+    out.set(newSzEnc, i + 4);
+    out.set(durEl,    insertAt);
+    out.set(arr.subarray(insertAt), insertAt + 11);
+    return new Blob([out.buffer], {type: blob.type});
+  }
+
+  return blob;
+}
+
+// Seek to end of a blob to measure its actual duration in ms.
+// Used for pre-composited replay blobs where we don't have a timer value.
+function getBlobDuration(blob){
+  return new Promise(resolve => {
+    const vid = document.createElement('video');
+    vid.preload = 'metadata';
+    vid.src = URL.createObjectURL(blob);
+    vid.onloadedmetadata = () => {
+      if(isFinite(vid.duration) && vid.duration > 0){
+        URL.revokeObjectURL(vid.src); resolve(vid.duration * 1000);
+      } else {
+        vid.currentTime = 1e101;
+        vid.ontimeupdate = () => {
+          vid.ontimeupdate = null;
+          const ms = vid.currentTime * 1000;
+          URL.revokeObjectURL(vid.src);
+          resolve(ms > 0 ? ms : null);
+        };
+      }
+    };
+    vid.onerror = () => { URL.revokeObjectURL(vid.src); resolve(null); };
+    vid.load();
+  });
+}
+
+function updateRecTimer(){
+  document.getElementById('recTimer').textContent = formatRecTime(recSeconds);
+}
+function formatRecTime(s){
+  const m = Math.floor(s/60);
+  return String(m).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+function openFlag(){
+  if(hasFlagged) return;
+  document.getElementById('flagModal').classList.add('open');
+  document.getElementById('flagSuccess').style.display = 'none';
+  document.getElementById('flagActions').style.display = 'flex';
+  document.getElementById('flagConfirmBtn').disabled = false;
+}
+function closeFlag(){
+  document.getElementById('flagModal').classList.remove('open');
+}
+
+async function submitFlag(){
+  const btn = document.getElementById('flagConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Reporting…';
+
+  try {
+    await fetch('/api/flag', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ roomId })
+    });
+  } catch(e){ /* best-effort */ }
+
+  hasFlagged = true;
+  document.getElementById('flagActions').style.display = 'none';
+  document.getElementById('flagSuccess').style.display = 'block';
+  setTimeout(()=>{
+    closeFlag();
+    const flagBtn = document.getElementById('flagBtn');
+    flagBtn.classList.add('flagged');
+    flagBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15" stroke="currentColor" stroke-width="2" fill="none"/></svg> Reported`;
+  }, 1800);
+}
+
+// ─── FULLSCREEN ──────────────────────────────────────────────────────────────
+const ICON_EXPAND = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg> Fullscreen`;
+const ICON_COLLAPSE = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg> Exit`;
+
+function toggleFullscreen(){
+  const wrap = document.getElementById('streamWrap');
+  const scoreBox = document.getElementById('scoreBox');
+  const btn = document.getElementById('fullscreenBtn');
+
+  if(!document.fullscreenElement){
+    // Move scoreBox inside streamWrap so it appears in fullscreen
+    wrap.appendChild(scoreBox);
+    scoreBox.style.position = 'absolute';
+    scoreBox.style.bottom = '0';
+    scoreBox.style.left = '0';
+    scoreBox.style.right = '0';
+    scoreBox.style.zIndex = '10';
+
+    const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen || wrap.mozRequestFullScreen;
+    if(req){
+      req.call(wrap).catch(()=>{});
+    } else {
+      // CSS fallback for unsupported browsers
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:9000;background:#000';
+    }
+    btn.innerHTML = ICON_COLLAPSE;
+  } else {
+    if(document.exitFullscreen) document.exitFullscreen();
+  }
+}
+
+function exitFullscreenCleanup(){
+  const wrap = document.getElementById('streamWrap');
+  const scoreBox = document.getElementById('scoreBox');
+  const btn = document.getElementById('fullscreenBtn');
+
+  // Move scoreBox back to body-level (its original position, fixed bottom)
+  document.body.appendChild(scoreBox);
+  scoreBox.style.position = '';
+  scoreBox.style.bottom = '';
+  scoreBox.style.left = '';
+  scoreBox.style.right = '';
+  scoreBox.style.zIndex = '';
+  scoreBox.style.opacity = ''; // restore if it was hidden
+  scoreBox.style.pointerEvents = '';
+  scoreBox.style.transition = '';
+  clearTimeout(_scoreTapTimer);
+  wrap.style.cssText = 'position:relative;width:100%;height:100%';
+
+  if(btn) btn.innerHTML = ICON_EXPAND;
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if(!document.fullscreenElement) exitFullscreenCleanup();
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  if(!document.webkitFullscreenElement) exitFullscreenCleanup();
+});
+
+// Tap bottom 30% of screen in fullscreen to toggle score visibility
+let _scoreTapTimer = null;
+document.addEventListener('click', (e) => {
+  if(!document.fullscreenElement && !document.webkitFullscreenElement) return;
+  const wrap = document.getElementById('streamWrap');
+  if(!wrap || !wrap.contains(e.target)) return;
+  const tapY = e.clientY;
+  const screenH = window.innerHeight;
+  if(tapY > screenH * 0.7){
+    // Tapped bottom 30% — toggle score
+    const scoreBox = document.getElementById('scoreBox');
+    if(!scoreBox) return;
+    const isVisible = scoreBox.style.opacity !== '0';
+    if(isVisible){
+      scoreBox.style.transition = 'opacity 0.25s';
+      scoreBox.style.opacity = '0';
+      scoreBox.style.pointerEvents = 'none';
+    } else {
+      scoreBox.style.transition = 'opacity 0.25s';
+      scoreBox.style.opacity = '1';
+      scoreBox.style.pointerEvents = '';
+    }
+    // Auto-restore score after 8 seconds if hidden
+    clearTimeout(_scoreTapTimer);
+    if(!isVisible) _scoreTapTimer = setTimeout(() => {
+      scoreBox.style.opacity = '1';
+      scoreBox.style.pointerEvents = '';
+    }, 8000);
+  }
+});
+
+// Fix 4: Unmute toggle
+function toggleMute(){
+  const vid = document.getElementById('vid');
+  const btn = document.getElementById('muteBtn');
+  vid.muted = !vid.muted;
+  btn.textContent = vid.muted ? '🔇 Unmute' : '🔊 Mute';
+}
+
+function showBanned(){
+  document.getElementById('bannedBanner').style.display = 'flex';
+  document.getElementById('scoreBox').style.display = 'none';
+  document.getElementById('flagBtn').style.display = 'none';
+}
+
+// showCohostPrompt / acceptCohost / declineCohost removed — all viewers auto-relay
+
+// ─── VIEWER LOCAL REPLAY BUFFER ──────────────────────────────────────────────
+// Records the incoming WebRTC stream locally. Viewer can replay last 20s
+// independently at any time. Live audio continues underneath the overlay.
+let _vRollRecorder  = null;
+let _vRollChunks    = [];
+let _vRollPrevBlob  = null;
+let _vRollMime      = '';
+let _vRollActive    = false;
+let _vRollObjectUrl = null;
+let _vRollCycleTimer = null;
+let _vRollPendingCb  = null;
+let _vRollCanvas     = null;   // canvas used when compositing score into the buffer
+let _vRollRaf        = null;   // RAF handle for compositing loop
+let _vRollStream     = null;   // stream actually fed to _vRollRecorder
+let _vRollComposited = false;  // true when blob already has score burned in
+const V_ROLL_SECS   = 20;
+const V_ROLL_SLICE  = 200;
+
+function viewerStartRollingBuffer(stream){
+  if(!stream) return;
+  _vRollMime       = getSupportedMime();
+  _vRollActive     = true;
+  _vRollComposited = false;
+
+  // Mirror the startRecord() technique: draw the live <video> element to a canvas
+  // frame-by-frame with the score overlay burned in, then record the canvas stream.
+  // This avoids the hardware-decoder canvas-readback problem that causes black
+  // frames when trying to composite a blob playback at save time.
+  const vid = document.getElementById('vid');
+  const captureOk = typeof HTMLCanvasElement.prototype.captureStream === 'function' ||
+                    typeof HTMLCanvasElement.prototype.mozCaptureStream === 'function';
+
+  if(captureOk){
+    const w = vid.videoWidth  || 1280;
+    const h = vid.videoHeight || 720;
+    _vRollCanvas = document.createElement('canvas');
+    _vRollCanvas.width = w; _vRollCanvas.height = h;
+    const ctx = _vRollCanvas.getContext('2d');
+
+    function drawVRollFrame(){
+      if(!_vRollActive){ return; }
+      if(vid.readyState >= 2){
+        ctx.drawImage(vid, 0, 0, w, h);
+        const bh = Math.round(h * 0.08);
+        const y  = h - bh;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, y, w, bh);
+        const _sc = lastScoreMsg?.score || {};
+        const p1n = (_sc.p1name || document.getElementById('p1name')?.textContent || 'P1').toUpperCase();
+        const p2n = (_sc.p2name || document.getElementById('p2name')?.textContent || 'P2').toUpperCase();
+        const p1p = String(_sc.p1?.pts ?? document.getElementById('p1pts')?.textContent ?? '0');
+        const p2p = String(_sc.p2?.pts ?? document.getElementById('p2pts')?.textContent ?? '0');
+        const p1g = (_sc.p1?.games > 0) ? `(${_sc.p1.games})` : '';
+        const p2g = (_sc.p2?.games > 0) ? `(${_sc.p2.games})` : '';
+        const fs  = Math.round(bh * 0.36);
+        const pad = Math.round(w * 0.02);
+        const mid = w / 2;
+        const cy  = y + bh * 0.5;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.font = `700 ${fs}px sans-serif`; ctx.fillStyle = '#ff4d00';
+        ctx.fillText(p1n, pad, cy - bh * 0.12);
+        if(p1g){ ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`; ctx.fillStyle = '#aaa'; ctx.fillText(p1g, pad, cy + bh * 0.3); }
+        ctx.textAlign = 'right';
+        ctx.font = `700 ${fs}px sans-serif`; ctx.fillStyle = '#00c8ff';
+        ctx.fillText(p2n, w - pad, cy - bh * 0.12);
+        if(p2g){ ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`; ctx.fillStyle = '#aaa'; ctx.fillText(p2g, w - pad, cy + bh * 0.3); }
+        ctx.textAlign = 'center';
+        ctx.font = `700 ${Math.round(fs*1.25)}px monospace`; ctx.fillStyle = '#fff';
+        ctx.fillText(`${p1p}  –  ${p2p}`, mid, cy);
+      }
+      _vRollRaf = requestAnimationFrame(drawVRollFrame);
+    }
+    drawVRollFrame();
+
+    const captureFn = (_vRollCanvas.captureStream || _vRollCanvas.mozCaptureStream).bind(_vRollCanvas);
+    const combined  = new MediaStream();
+    captureFn(25).getVideoTracks().forEach(t => combined.addTrack(t));
+    stream.getAudioTracks().forEach(t => combined.addTrack(t));
+    _vRollStream     = combined;
+    _vRollComposited = true;
+  } else {
+    // iOS Safari — captureStream not available, record raw stream
+    _vRollStream = stream;
+  }
+
+  _vStartCycle(_vRollStream);
+  console.log('Viewer replay buffer started, composited:', _vRollComposited);
+}
+
+function _vStartCycle(stream){
+  if(!_vRollActive || !stream?.active) return;
+  _vRollChunks = [];
+  clearTimeout(_vRollCycleTimer);
+  try{
+    _vRollRecorder = new MediaRecorder(stream, _vRollMime ? {mimeType: _vRollMime} : {});
+  }catch(e){ console.warn('Viewer replay recorder error:', e); return; }
+
+  _vRollRecorder.ondataavailable = e => {
+    if(e.data?.size > 0) _vRollChunks.push(e.data);
+  };
+  _vRollRecorder.onstop = () => {
+    const mime = (_vRollMime || 'video/webm').split(';')[0];
+    if(_vRollChunks.length > 0)
+      _vRollPrevBlob = new Blob(_vRollChunks, {type: mime});
+    if(_vRollPendingCb){
+      const cb = _vRollPendingCb; _vRollPendingCb = null; cb();
+    } else if(_vRollActive){
+      _vStartCycle(stream);
+    }
+  };
+  _vRollRecorder.start(V_ROLL_SLICE);
+  _vRollCycleTimer = setTimeout(()=>{
+    if(_vRollRecorder?.state === 'recording') _vRollRecorder.stop();
+  }, V_ROLL_SECS * 1000);
+}
+
+function viewerStopRollingBuffer(){
+  _vRollActive = false;
+  clearTimeout(_vRollCycleTimer);
+  _vRollPendingCb = null;
+  cancelAnimationFrame(_vRollRaf); _vRollRaf = null; _vRollCanvas = null; _vRollStream = null; _vRollComposited = false;
+  if(_vRollRecorder?.state !== 'inactive') _vRollRecorder?.stop();
+  _vRollRecorder = null;
+  _vRollChunks   = [];
+}
+
+function viewerTriggerReplay(){
+  if(!_vRollRecorder && !_vRollPrevBlob){
+    alert('Buffer not ready — wait a moment then try again.'); return;
+  }
+  if(_vRollRecorder?.state === 'recording'){
+    clearTimeout(_vRollCycleTimer);
+    _vRollPendingCb = _vDoShowReplay;
+    _vRollRecorder.stop();
+  } else {
+    _vDoShowReplay();
+  }
+}
+
+function _vDoShowReplay(){
+  const mime = (_vRollMime || 'video/webm').split(';')[0];
+  const parts = [];
+  if(_vRollPrevBlob) parts.push(_vRollPrevBlob);
+  if(_vRollChunks.length > 0) parts.push(new Blob(_vRollChunks, {type: mime}));
+  if(!parts.length){ alert('Not enough data yet — try again in a moment.'); return; }
+
+  const blob = new Blob(parts, {type: mime});
+  console.log('Viewer replay:', (blob.size/1024).toFixed(0)+'KB');
+
+  // Restart cycle immediately so buffer keeps filling during replay
+  if(_vRollStream) _vStartCycle(_vRollStream);
+
+  if(_vRollObjectUrl) URL.revokeObjectURL(_vRollObjectUrl);
+  _vRollObjectUrl = URL.createObjectURL(blob);
+  showViewerReplayOverlay(_vRollObjectUrl, mime, blob);
+}
+
+// ─── VIEWER REPLAY FUNCTIONS ─────────────────────────────────────────────────
+// Each viewer gets their own full-featured replay overlay.
+// They control speed, scrub, save, and dismiss entirely independently.
+
+let _vSavedReplayBlob = null;
+let _vReplayScore = null; // score snapshot at time of replay trigger
+let _viewerGameWonAudio = null; // reference so game_ready can stop it
+
+function showViewerReplayOverlay(url, mime, blob){
+  _vSavedReplayBlob = blob || null;
+  // Snapshot score now so save uses the same score shown in the overlay
+  _vReplayScore = lastScoreMsg?.score ? JSON.parse(JSON.stringify(lastScoreMsg.score)) : null;
+  const existing = document.getElementById('replayOverlay');
+  if(existing) existing.remove();
+
+  const ov = document.createElement('div');
+  ov.id = 'replayOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(7,9,12,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.85rem;padding:1.5rem;overflow-y:auto;';
+
+  // Build score bar HTML from replay-time score snapshot
+  const _sc = _vReplayScore || lastScoreMsg?.score || {};
+  const _p1n = (_sc.p1name || '').toUpperCase();
+  const _p2n = (_sc.p2name || '').toUpperCase();
+  const _p1p = _sc.p1?.pts ?? 0;
+  const _p2p = _sc.p2?.pts ?? 0;
+  const _p1g = _sc.p1?.games > 0 ? ` (${_sc.p1.games})` : '';
+  const _p2g = _sc.p2?.games > 0 ? ` (${_sc.p2.games})` : '';
+
+  const speeds = [1, 0.75, 0.5, 0.25];
+  ov.innerHTML = `
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:0.1em;color:#00c8ff;">⏪ INSTANT REPLAY</div>
+    <div style="position:relative;max-width:min(640px,90vw);width:100%;">
+      <video id="viewerReplayVid" style="width:100%;border-radius:10px;background:#000;outline:none;display:block;" controls playsinline muted>
+        <source src="${url}" type="${mime || 'video/webm'}">
+      </video>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:0.35rem 0.75rem;
+        background:rgba(0,0,0,0.72);border-radius:0 0 10px 10px;
+        display:flex;align-items:center;justify-content:space-between;
+        font-family:'Outfit',sans-serif;font-size:0.82rem;pointer-events:none;">
+        <span style="color:#ff4d00;font-weight:700;">${_p1n}${_p1g}</span>
+        <span style="color:#fff;font-weight:700;font-family:'Space Mono',monospace;font-size:1rem;">${_p1p} – ${_p2p}</span>
+        <span style="color:#00c8ff;font-weight:700;">${_p2n}${_p2g}</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;justify-content:center;">
+      <span style="font-family:'Space Mono',monospace;font-size:0.65rem;color:#6b7280;letter-spacing:0.06em;">SPEED</span>
+      ${speeds.map(s=>`
+        <button onclick="viewerSetReplaySpeed(${s})" id="vSpeedBtn${s.toString().replace('.','_')}" style="
+          padding:0.35rem 0.7rem;border-radius:5px;border:1px solid rgba(255,255,255,0.12);
+          background:${s===1?'rgba(0,200,255,0.2)':'transparent'};
+          color:${s===1?'#00c8ff':'#6b7280'};font-family:'Space Mono',monospace;
+          font-size:0.65rem;cursor:pointer;transition:all 0.15s;">${s===1?'1×':s+'×'}</button>
+      `).join('')}
+    </div>
+    <div style="display:flex;gap:0.65rem;flex-wrap:wrap;justify-content:center;">
+      <button id="viewerSaveBtn" onclick="viewerSaveReplay()" style="
+        padding:0.5rem 1.1rem;background:rgba(0,200,255,0.12);color:#00c8ff;
+        border:1px solid rgba(0,200,255,0.35);border-radius:7px;
+        font-family:'Outfit',sans-serif;font-weight:600;font-size:0.83rem;cursor:pointer;">
+        ⬇ Save Replay
+      </button>
+      <button onclick="viewerCloseReplay()" style="
+        padding:0.5rem 1.1rem;background:var(--accent);color:#fff;border:none;
+        border-radius:7px;font-family:'Outfit',sans-serif;font-weight:700;
+        font-size:0.83rem;cursor:pointer;">
+        ✕ Back to Live
+      </button>
+    </div>
+  `;
+  // Append to the active fullscreen element so fixed overlay renders on top of it,
+  // or body when not in fullscreen.
+  (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(ov);
+
+  const vid = document.getElementById('viewerReplayVid');
+  vid.load();
+  vid.play().catch(()=>{});
+}
+
+function viewerSetReplaySpeed(speed){
+  const vid = document.getElementById('viewerReplayVid');
+  if(vid) vid.playbackRate = speed;
+  [1, 0.75, 0.5, 0.25].forEach(s=>{
+    const btn = document.getElementById('vSpeedBtn'+s.toString().replace('.','_'));
+    if(!btn) return;
+    btn.style.background  = s===speed ? 'rgba(0,200,255,0.2)' : 'transparent';
+    btn.style.color       = s===speed ? '#00c8ff' : '#6b7280';
+    btn.style.borderColor = s===speed ? 'rgba(0,200,255,0.4)' : 'rgba(255,255,255,0.12)';
+  });
+}
+
+function viewerSaveReplay(){
+  const blob = _vSavedReplayBlob;
+  if(!blob){ alert('Nothing to save.'); return; }
+
+  const btn = document.getElementById('viewerSaveBtn');
+  if(btn){ btn.textContent = '⏳ Saving…'; btn.disabled = true; }
+
+  const mimeType = _vRollMime ? _vRollMime.split(';')[0] : (
+    MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' :
+    MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : ''
+  );
+  const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+  const name = `replay-${Date.now()}.${ext}`;
+
+  // If the rolling buffer was recorded via canvas compositing, the blob already
+  // has the score overlay burned in — just download it directly. This avoids
+  // the hardware-decoder canvas readback issue that causes black frames when
+  // trying to composite a blob through a hidden <video> at save time.
+  if(_vRollComposited){
+    (async ()=>{
+      let outBlob = blob;
+      const durMs = await getBlobDuration(blob);
+      if(durMs) outBlob = await fixRecordingDuration(blob, durMs);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(outBlob);
+      a.download = name;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 5000);
+      if(btn){ btn.textContent = '⬇ Save Replay'; btn.disabled = false; }
+    })();
+    return;
+  }
+
+  // Fallback for iOS (raw blob, no canvas): attempt canvas composite at save time.
+  // On iOS captureStream is also unavailable, so this will hit the !captureOk branch
+  // and save the raw blob directly.
+  const tempVid = document.createElement('video');
+  tempVid.src = URL.createObjectURL(blob);
+  tempVid.muted = true;
+  tempVid.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;';
+  document.body.appendChild(tempVid);
+
+  tempVid.onloadedmetadata = ()=>{
+    const w = tempVid.videoWidth  || 1280;
+    const h = tempVid.videoHeight || 720;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+
+    function drawScoreBar(){
+      const bh = Math.round(h * 0.08);
+      const y  = h - bh;
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(0, y, w, bh);
+
+      const _sc = _vReplayScore || lastScoreMsg?.score || {};
+      const p1n = (_sc.p1name || '').toUpperCase();
+      const p2n = (_sc.p2name || '').toUpperCase();
+      const p1p = String(_sc.p1?.pts ?? 0);
+      const p2p = String(_sc.p2?.pts ?? 0);
+      const p1g = (_sc.p1?.games > 0) ? `(${_sc.p1.games})` : '';
+      const p2g = (_sc.p2?.games > 0) ? `(${_sc.p2.games})` : '';
+      const fs  = Math.round(bh * 0.36);
+      const pad = Math.round(w * 0.02);
+      const mid = w / 2;
+      const cy  = y + bh * 0.5;
+      ctx.textBaseline = 'middle';
+
+      ctx.textAlign = 'left';
+      ctx.font = `700 ${fs}px sans-serif`;
+      ctx.fillStyle = '#ff4d00';
+      ctx.fillText(p1n, pad, cy - bh * 0.12);
+      if(p1g){ ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`; ctx.fillStyle = '#aaa'; ctx.fillText(p1g, pad, cy + bh * 0.3); }
+
+      ctx.textAlign = 'right';
+      ctx.font = `700 ${fs}px sans-serif`;
+      ctx.fillStyle = '#00c8ff';
+      ctx.fillText(p2n, w - pad, cy - bh * 0.12);
+      if(p2g){ ctx.font = `400 ${Math.round(fs*0.65)}px sans-serif`; ctx.fillStyle = '#aaa'; ctx.fillText(p2g, w - pad, cy + bh * 0.3); }
+
+      ctx.textAlign = 'center';
+      ctx.font = `700 ${Math.round(fs*1.25)}px monospace`;
+      ctx.fillStyle = '#fff';
+      ctx.fillText(`${p1p}  –  ${p2p}`, mid, cy);
+    }
+
+    // iOS Safari doesn't support canvas.captureStream() — detect and fall back
+    // to downloading the raw blob directly if canvas recording isn't possible.
+    const captureOk = typeof canvas.captureStream === 'function' || typeof canvas.mozCaptureStream === 'function';
+    const captureFn = (canvas.captureStream || canvas.mozCaptureStream)?.bind(canvas);
+
+    // Use the same mime type the rolling buffer used — respects iOS mp4 requirement
+    const mimeType = _vRollMime ? (_vRollMime.split(';')[0]) : (
+      MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' :
+      MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : ''
+    );
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+
+    if(!captureOk || !mimeType){
+      // iOS Safari fallback — save raw blob (no score burn-in, but works)
+      cancelAnimationFrame(_saveFrame);
+      URL.revokeObjectURL(tempVid.src); tempVid.remove();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `replay-${Date.now()}.${ext}`;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 5000);
+      if(btn){ btn.textContent = '⬇ Save Replay'; btn.disabled = false; }
+      return;
+    }
+
+    const canvasStream = captureFn(25);
+    const combined = new MediaStream();
+    canvasStream.getVideoTracks().forEach(t => combined.addTrack(t));
+    // No audio in saved replays — video only
+
+    let rec, chunks = [];
+    try{ rec = new MediaRecorder(combined, mimeType ? {mimeType} : {}); }
+    catch(e){ rec = new MediaRecorder(combined); }
+
+    rec.ondataavailable = e => { if(e.data?.size > 0) chunks.push(e.data); };
+    rec.onstop = async ()=>{
+      cancelAnimationFrame(_saveFrame);
+      let outBlob = new Blob(chunks, {type: mimeType || 'video/webm'});
+      if(_replayDuration > 0) outBlob = await fixRecordingDuration(outBlob, _replayDuration * 1000);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(outBlob);
+      a.download = `replay-${Date.now()}.${ext}`;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(a.href); URL.revokeObjectURL(tempVid.src); tempVid.remove(); }, 5000);
+      if(btn){ btn.textContent = '⬇ Save Replay'; btn.disabled = false; }
+    };
+
+    let _saveFrame, _replayDuration = 0;
+    let _started = false;
+    function drawLoop(){
+      if(_started && tempVid.ended){ _replayDuration = tempVid.currentTime; rec.stop(); return; }
+      if(tempVid.readyState >= 2){
+        ctx.drawImage(tempVid, 0, 0, w, h);
+        drawScoreBar();
+        _started = true;
+      }
+      _saveFrame = requestAnimationFrame(drawLoop);
+    }
+
+    rec.start(1000);
+    tempVid.play().then(()=>{ drawLoop(); }).catch(e=>{ alert('Save failed: '+e.message); if(btn){ btn.textContent='⬇ Save Replay'; btn.disabled=false; } });
+  };
+
+  tempVid.onerror = e => { alert('Save failed — could not load replay.'); if(btn){ btn.textContent='⬇ Save Replay'; btn.disabled=false; } URL.revokeObjectURL(tempVid.src); tempVid.remove(); };
+  tempVid.load();
+}
+
+function viewerCloseReplay(){
+  const ov = document.getElementById('replayOverlay');
+  if(ov){
+    const v = ov.querySelector('video');
+    if(v){ v.pause(); v.src = ''; }
+    ov.remove();
+  }
+  if(_vRollObjectUrl){ URL.revokeObjectURL(_vRollObjectUrl); _vRollObjectUrl = null; }
+}
+
+// ─── VIEWER GAME WON OVERLAY ─────────────────────────────────────────────────
+
+function buildPointSeqViewer(log){
+  let p1=0, p2=0;
+  return (log||[]).map(pt=>{ if(pt.scorer==='p1') p1++; else p2++; return `${p1}–${p2}`; });
+}
+
+function renderViewerStatsTable(gameHistory, pointLogs, p1name, p2name){
+  const cols = [];
+  for(let i=0;i<5;i++){
+    const gh = (gameHistory||[])[i];
+    const log = (pointLogs||[])[i] || [];
+    const seq = buildPointSeqViewer(log);
+    const isCurrent = !!gh;
+    const winnerCol = gh ? (gh.winner===1?'#ff4d00':'#00c8ff') : 'transparent';
+
+    cols.push(`
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:0;flex:1">
+        <div style="font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:0.14em;
+          color:${isCurrent?'#e0e0e0':'#333'};margin-bottom:0.5rem;white-space:nowrap">GAME ${i+1}</div>
+        <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:0.1rem;
+          min-height:80px;max-height:45vh;overflow-y:auto">
+          ${seq.map((s,idx)=>`
+            <div style="font-family:'Space Mono',monospace;font-size:0.72rem;
+              color:${idx===seq.length-1?winnerCol:'#8888aa'};
+              font-weight:${idx===seq.length-1?'700':'400'};
+              padding:0.05rem 0;line-height:1.4;white-space:nowrap">${s}</div>`).join('')}
+          ${!isCurrent?`<div style="color:#333;font-size:0.65rem;font-family:'Space Mono',monospace">—</div>`:''}
+        </div>
+      </div>`);
+  }
+  return `
+    <div style="display:flex;gap:clamp(0.5rem,2vw,1.5rem);width:100%;max-width:600px;
+      padding:1rem;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+      border-radius:10px;justify-content:space-between">
+      ${cols.join('<div style="width:1px;background:rgba(255,255,255,0.07);flex-shrink:0"></div>')}
+    </div>`;
+}
+
+function showViewerGameWonOverlay(d){
+  closeViewerGameWonOverlay();
+
+  // Play sound directly from Supabase — bypasses host bandwidth entirely
+  if(d.audioUrl){
+    try{
+      _viewerGameWonAudio = new Audio(d.audioUrl);
+      _viewerGameWonAudio.volume = 0.9;
+      _viewerGameWonAudio.play().catch(()=>{});
+    }catch(e){ _viewerGameWonAudio = null; }
+  }
+
+  const winnerName = d.winner===1 ? d.p1name : d.p2name;
+  const col = d.winner===1 ? '#ff4d00' : '#00c8ff';
+
+  const ov = document.createElement('div');
+  ov.id = 'viewerGameWonOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(7,9,12,0.93);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;padding:1.5rem;overflow-y:auto;backdrop-filter:blur(4px)';
+  ov.innerHTML = `
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:clamp(1.6rem,4vw,2.4rem);letter-spacing:0.12em;color:${col};text-align:center">
+      🏆 ${(winnerName||'').toUpperCase()} WON GAME ${d.gameNum||''}
+    </div>
+    <div style="font-family:'Outfit',sans-serif;font-size:0.95rem;color:#6b7280;letter-spacing:0.08em;text-align:center">
+      <span style="color:#ff4d00;font-weight:700">${(d.p1name||'').toUpperCase()}</span>
+      &nbsp;vs&nbsp;
+      <span style="color:#00c8ff;font-weight:700">${(d.p2name||'').toUpperCase()}</span>
+    </div>
+    ${renderViewerStatsTable(d.gameHistory, d.pointLogs, d.p1name, d.p2name)}
+    <div style="font-family:'Space Mono',monospace;font-size:0.62rem;color:#444;letter-spacing:0.1em;margin-top:0.25rem">
+      WAITING FOR HOST…
+    </div>`;
+
+  (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(ov);
+}
+
+function closeViewerGameWonOverlay(){
+  if(_viewerGameWonAudio){ try{ _viewerGameWonAudio.pause(); _viewerGameWonAudio.currentTime=0; }catch(e){} _viewerGameWonAudio=null; }
+  document.getElementById('viewerGameWonOverlay')?.remove();
+}
+
+function showViewerIntermission(d){
+  closeViewerGameWonOverlay();
+  const existing = document.getElementById('viewerGameWonOverlay');
+  if(existing) existing.remove();
+  const ov = document.createElement('div');
+  ov.id = 'viewerGameWonOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(7,9,12,0.97);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;padding:1.5rem;backdrop-filter:blur(4px)';
+  ov.innerHTML = `
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,5vw,3rem);letter-spacing:0.15em;color:#e0e0e0">⏸ INTERMISSION</div>
+    <div style="font-family:'Outfit',sans-serif;font-size:0.95rem;color:#6b7280">Match resuming shortly…</div>
+    ${renderViewerStatsTable(d.gameHistory, d.pointLogs, d.p1name, d.p2name)}`;
+  (document.fullscreenElement || document.webkitFullscreenElement || document.body).appendChild(ov);
+}
+
+// Close modal on backdrop click
+document.getElementById('flagModal').addEventListener('click', e=>{
+  if(e.target === document.getElementById('flagModal')) closeFlag();
+});
+</script>
+<script>
+}
+</script>
+<!-- PWA Install Banner -->
+<div id="pwaInstallBanner" style="display:none;position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);
+  z-index:9990;background:#0f1318;border:1px solid rgba(255,77,0,0.3);border-radius:10px;
+  padding:0.85rem 1.25rem;max-width:360px;width:calc(100% - 2rem);
+  display:none;align-items:center;gap:0.85rem;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);backdrop-filter:blur(10px)">
+  <img src="/icons/icon-192.png" style="width:40px;height:40px;border-radius:8px;flex-shrink:0"/>
+  <div style="flex:1;min-width:0">
+    <div style="font-weight:700;font-size:0.85rem">Add SquashLive to Home Screen</div>
+    <div style="font-size:0.72rem;color:#6b7280;margin-top:0.1rem">Watch matches instantly, any time</div>
+  </div>
+  <button id="pwaInstallBtn" style="background:#ff4d00;color:#fff;border:none;border-radius:6px;
+    font-family:'Outfit',sans-serif;font-weight:700;font-size:0.8rem;padding:0.5rem 0.85rem;
+    cursor:pointer;white-space:nowrap;flex-shrink:0">
+    Install
+  </button>
+  <button onclick="document.getElementById('pwaInstallBanner').style.display='none'"
+    style="background:none;border:none;color:#6b7280;font-size:1.1rem;cursor:pointer;padding:0.2rem;flex-shrink:0">
+    ✕
+  </button>
+</div>
+<script>
+let _pwaPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  // Show banner after 3 seconds if not already installed
+  setTimeout(() => {
+    const banner = document.getElementById('pwaInstallBanner');
+    if(banner) banner.style.display = 'flex';
+  }, 3000);
+});
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('pwaInstallBtn');
+  if(btn) btn.addEventListener('click', async () => {
+    if(!_pwaPrompt) return;
+    _pwaPrompt.prompt();
+    const { outcome } = await _pwaPrompt.userChoice;
+    _pwaPrompt = null;
+    document.getElementById('pwaInstallBanner').style.display = 'none';
+  });
+});
+window.addEventListener('appinstalled', () => {
+  const banner = document.getElementById('pwaInstallBanner');
+  if(banner) banner.style.display = 'none';
+  _pwaPrompt = null;
+});
+</script>
+</body>
+</html>

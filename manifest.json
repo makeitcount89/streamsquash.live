@@ -1,0 +1,40 @@
+{
+  "name": "SquashLive",
+  "short_name": "SquashLive",
+  "description": "Live squash match streaming, scoring and highlights",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#07090c",
+  "theme_color": "#ff4d00",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Watch Live",
+      "short_name": "Watch",
+      "url": "/index.html",
+      "description": "Watch live squash matches"
+    },
+    {
+      "name": "Host a Match",
+      "short_name": "Host",
+      "url": "/auth.html",
+      "description": "Stream a live squash match"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["sports", "entertainment"]
+}
